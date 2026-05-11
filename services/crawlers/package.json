@@ -1,0 +1,16 @@
+{
+  "name": "@audio-story/crawlers",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "crawl:daily": "tsx src/jobs/run-daily.ts"
+  },
+  "dependencies": {
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4",
+    "typescript": "~5.8.3"
+  }
+}

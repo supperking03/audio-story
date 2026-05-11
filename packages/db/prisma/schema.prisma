@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SourceKind {
+  WEBSITE
+  YOUTUBE_CHANNEL
+  YOUTUBE_PLAYLIST
+  RSS
+  MANUAL
+}
+
+enum SourceStatus {
+  ACTIVE
+  PAUSED
+  FAILED
+}
+
+enum CrawlJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  PARTIAL
+}
+
+enum SeriesStatus {
+  ONGOING
+  COMPLETED
+  HIATUS
+}
+
+enum EpisodeProcessingStatus {
+  RAW
+  NORMALIZED
+  AUDIO_READY
+  TEXT_READY
+  PUBLISHED
+  REJECTED
+}
+
+model Source {
+  id                  String         @id @default(cuid())
+  key                 String         @unique
+  name                String
+  kind                SourceKind
+  status              SourceStatus   @default(ACTIVE)
+  homepageUrl         String?
+  externalIdentifier  String?
+  crawlSchedule       String?
+  parserVersion       String?
+  configJson          Json?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  seriesLinks         SourceSeries[]
+  crawlJobs           CrawlJob[]
+  rawContents         RawContent[]
+}
+
+model CrawlJob {
+  id               String         @id @default(cuid())
+  sourceId         String
+  status           CrawlJobStatus @default(QUEUED)
+  triggerType      String
+  startedAt        DateTime?
+  completedAt      DateTime?
+  discoveredCount  Int            @default(0)
+  publishedCount   Int            @default(0)
+  errorMessage     String?
+  metricsJson      Json?
+  createdAt        DateTime       @default(now())
+  source           Source         @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+}
+
+model StorySeries {
+  id                String         @id @default(cuid())
+  slug              String         @unique
+  title             String
+  normalizedTitle   String
+  author            String?
+  narrator          String?
+  description       String?
+  coverImageUrl     String?
+  language          String         @default("vi")
+  status            SeriesStatus   @default(ONGOING)
+  tags              String[]
+  metadataJson      Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  sourceLinks       SourceSeries[]
+  episodes          Episode[]
+  subscriptions     Subscription[]
+
+  @@index([normalizedTitle])
+}
+
+model SourceSeries {
+  id               String      @id @default(cuid())
+  sourceId         String
+  seriesId         String
+  externalSeriesId String?
+  sourceUrl        String?
+  isPrimary        Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  source           Source      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  series           StorySeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, seriesId])
+}
+
+model Episode {
+  id                   String                  @id @default(cuid())
+  seriesId             String
+  slug                 String                  @unique
+  title                String
+  normalizedTitle      String
+  episodeNumber        Float?
+  summary              String?
+  sourceUrl            String?
+  audioUrl             String?
+  transcriptText       String?
+  durationSec          Int?
+  publishedAt          DateTime?
+  processingStatus     EpisodeProcessingStatus @default(RAW)
+  metadataJson         Json?
+  checksum             String?
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  series               StorySeries             @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  listeningProgresses  ListeningProgress[]
+  rawContents          RawContent[]
+
+  @@index([seriesId, episodeNumber])
+  @@index([processingStatus])
+}
+
+model RawContent {
+  id                String   @id @default(cuid())
+  sourceId          String
+  episodeId         String?
+  externalItemId    String?
+  sourceUrl         String
+  payloadJson       Json?
+  rawText           String?
+  rawAudioUrl       String?
+  transcriptStatus  String?
+  ttsStatus         String?
+  capturedAt        DateTime @default(now())
+  source            Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  episode           Episode? @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+
+  @@index([sourceId, capturedAt])
+}
+
+model AppUser {
+  id                  String              @id @default(cuid())
+  email               String?             @unique
+  displayName         String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  subscriptions       Subscription[]
+  listeningProgresses ListeningProgress[]
+}
+
+model Subscription {
+  id         String    @id @default(cuid())
+  userId     String
+  seriesId   String
+  createdAt  DateTime  @default(now())
+  user       AppUser   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  series     StorySeries @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, seriesId])
+}
+
+model ListeningProgress {
+  id            String   @id @default(cuid())
+  userId        String
+  episodeId     String
+  progressSec   Int      @default(0)
+  completed     Boolean  @default(false)
+  lastPlayedAt  DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          AppUser  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode       Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, episodeId])
+  @@index([lastPlayedAt])
+}

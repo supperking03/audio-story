@@ -1,0 +1,21 @@
+{
+  "name": "audio-story-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev:mobile": "npm --workspace @audio-story/mobile run start",
+    "lint:mobile": "npm --workspace @audio-story/mobile run lint",
+    "typecheck:mobile": "npm --workspace @audio-story/mobile run typecheck",
+    "db:generate": "npm --workspace @audio-story/db run generate",
+    "db:migrate": "npm --workspace @audio-story/db run migrate:dev",
+    "crawler:dev": "npm --workspace @audio-story/crawlers run dev"
+  },
+  "dependencies": {
+    "expo": "^54.0.0"
+  }
+}

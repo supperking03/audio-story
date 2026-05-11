@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Audio Story",
+    "slug": "audio-story",
+    "scheme": "audiostory",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}

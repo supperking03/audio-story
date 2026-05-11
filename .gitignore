@@ -1,0 +1,12 @@
+node_modules
+.DS_Store
+.expo
+.turbo
+dist
+build
+coverage
+*.log
+.env
+.env.*
+apps/mobile/.expo
+packages/db/generated
