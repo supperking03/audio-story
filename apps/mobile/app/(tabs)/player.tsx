@@ -1,66 +1,187 @@
 import { Feather } from "@expo/vector-icons";
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { continueListening } from "../../constants/mock-data";
 import { theme } from "../../constants/theme";
+import { getFallbackNowPlaying } from "../../data/story-service";
+import { useStory } from "../../hooks/use-story";
 
 const speedOptions = ["0.8x", "1.0x", "1.2x", "1.5x", "2.0x"];
 
+function formatClock(seconds?: number) {
+  if (!seconds || Number.isNaN(seconds)) {
+    return "00:00";
+  }
+
+  const totalSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+
+  return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+}
+
 export default function PlayerScreen() {
+  const nowPlaying = getFallbackNowPlaying();
+  const params = useLocalSearchParams<{ episodeId?: string; seriesId?: string }>();
+  const seriesId = params.seriesId ?? nowPlaying.seriesId;
+  const { story: baseSeries, isLoading } = useStory(seriesId);
+  const [selectedSpeed, setSelectedSpeed] = useState("1.2x");
+  const currentEpisode = useMemo(() => {
+    if (params.episodeId) {
+      return baseSeries?.episodes.find((episode) => episode.id === params.episodeId) ?? null;
+    }
+
+    return baseSeries?.episodes[0] ?? null;
+  }, [baseSeries, params.episodeId]);
+  const player = useAudioPlayer(currentEpisode?.audioUrl ?? null, { updateInterval: 500 });
+  const status = useAudioPlayerStatus(player);
+
+  useEffect(() => {
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false
+    }).catch(() => {
+      // Keep the player usable even if audio mode config fails on a simulator/device.
+    });
+  }, []);
+
+  useEffect(() => {
+    player.setPlaybackRate(Number.parseFloat(selectedSpeed), "medium");
+  }, [player, selectedSpeed]);
+
+  const episodeIndex = baseSeries?.episodes.findIndex((episode) => episode.id === currentEpisode?.id) ?? -1;
+  const progress = status.duration > 0 ? status.currentTime / status.duration : nowPlaying.progress;
+  const hasAudio = Boolean(currentEpisode?.audioUrl);
+
+  const changeEpisode = (direction: -1 | 1) => {
+    if (!baseSeries || episodeIndex < 0) {
+      return;
+    }
+
+    const nextEpisode = baseSeries.episodes[episodeIndex + direction];
+    if (!nextEpisode) {
+      return;
+    }
+
+    router.replace({
+      pathname: "/player",
+      params: { seriesId: baseSeries.id, episodeId: nextEpisode.id }
+    });
+  };
+
+  const togglePlayback = async () => {
+    if (!hasAudio) {
+      return;
+    }
+
+    if (status.playing) {
+      player.pause();
+      return;
+    }
+
+    if (status.didJustFinish || (status.duration > 0 && status.currentTime >= status.duration)) {
+      player.seekTo(0);
+    }
+
+    player.play();
+  };
+
+  const seekBy = (offsetSeconds: number) => {
+    if (!hasAudio || status.duration <= 0) {
+      return;
+    }
+
+    const nextTime = Math.min(Math.max(0, status.currentTime + offsetSeconds), status.duration);
+    player.seekTo(nextTime);
+  };
+
+  if (isLoading) {
+    return (
+      <SafeAreaView edges={["top"]} style={styles.safeArea}>
+        <View style={styles.content}>
+          <Text style={styles.loadingText}>Đang tải audio...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <View style={styles.content}>
         <LinearGradient colors={["#5C1A1B", "#A63D40", "#E09F3E"]} style={styles.coverArt}>
-          <Text style={styles.coverTitle}>{continueListening.title}</Text>
-          <Text style={styles.coverEpisode}>{continueListening.episodeTitle}</Text>
+          <Text style={styles.coverTitle}>{baseSeries?.title ?? nowPlaying.title}</Text>
+          <Text style={styles.coverEpisode}>{currentEpisode?.title ?? nowPlaying.episodeTitle}</Text>
         </LinearGradient>
 
         <View style={styles.metaSection}>
-          <Text style={styles.storyEpisode}>Còn 9 phút</Text>
+          <Text style={styles.storyEpisode}>
+            {currentEpisode?.durationLabel ?? "Chưa rõ"} • {selectedSpeed}
+          </Text>
+          {!hasAudio ? <Text style={styles.helperText}>Tập này chưa có file audio thật.</Text> : null}
         </View>
 
         <View style={styles.timeline}>
           <View style={styles.timelineTrack}>
-            <View style={[styles.timelineFill, { width: `${continueListening.progress * 100}%` }]} />
+            <View style={[styles.timelineFill, { width: `${Math.min(Math.max(progress, 0), 1) * 100}%` }]} />
           </View>
           <View style={styles.timelineLabels}>
-            <Text style={styles.timelineText}>18:42</Text>
-            <Text style={styles.timelineText}>27:31</Text>
+            <Text style={styles.timelineText}>{formatClock(status.currentTime)}</Text>
+            <Text style={styles.timelineText}>{formatClock(status.duration)}</Text>
           </View>
         </View>
 
         <View style={styles.controls}>
-          <ControlButton icon="rotate-ccw" label="15s" />
-          <ControlButton icon="skip-back" label="" />
-          <Pressable style={styles.primaryButton}>
-            <Feather color="#11131C" name="pause" size={26} />
+          <ControlButton disabled={!hasAudio} icon="rotate-ccw" label="15s" onPress={() => seekBy(-15)} />
+          <ControlButton disabled={!baseSeries || episodeIndex >= baseSeries.episodes.length - 1} icon="skip-back" label="" onPress={() => changeEpisode(1)} />
+          <Pressable
+            disabled={!hasAudio}
+            onPress={togglePlayback}
+            style={[styles.primaryButton, !hasAudio && styles.disabledButton]}
+          >
+            <Feather color="#11131C" name={status.playing ? "pause" : "play"} size={26} />
           </Pressable>
-          <ControlButton icon="skip-forward" label="" />
-          <ControlButton icon="rotate-cw" label="30s" />
+          <ControlButton disabled={!baseSeries || episodeIndex <= 0} icon="skip-forward" label="" onPress={() => changeEpisode(-1)} />
+          <ControlButton disabled={!hasAudio} icon="rotate-cw" label="30s" onPress={() => seekBy(30)} />
         </View>
 
         <View style={styles.speedRow}>
           {speedOptions.map((option) => (
-            <View key={option} style={[styles.speedChip, option === "1.2x" && styles.speedChipActive]}>
-              <Text style={[styles.speedText, option === "1.2x" && styles.speedTextActive]}>{option}</Text>
-            </View>
+            <Pressable
+              key={option}
+              onPress={() => setSelectedSpeed(option)}
+              style={[styles.speedChip, option === selectedSpeed && styles.speedChipActive]}
+            >
+              <Text style={[styles.speedText, option === selectedSpeed && styles.speedTextActive]}>{option}</Text>
+            </Pressable>
           ))}
         </View>
 
         <View style={styles.utilityRow}>
-          <UtilityTile label="Sleep" value="30p" />
-          <UtilityTile label="Episodes" value="42" />
+          <UtilityTile label="Audio" value={hasAudio ? "Ready" : "Pending"} />
+          <UtilityTile label="Episodes" value={`${baseSeries?.episodes.length ?? 0}`} />
         </View>
       </View>
     </SafeAreaView>
   );
 }
 
-function ControlButton({ icon, label }: { icon: keyof typeof Feather.glyphMap; label: string }) {
+function ControlButton({
+  disabled = false,
+  icon,
+  label,
+  onPress
+}: {
+  disabled?: boolean;
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  onPress?: () => void;
+}) {
   return (
-    <Pressable style={styles.controlButton}>
+    <Pressable disabled={disabled} onPress={onPress} style={[styles.controlButton, disabled && styles.disabledButton]}>
       <Feather color={theme.colors.text} name={icon} size={22} />
       <Text style={styles.controlLabel}>{label}</Text>
     </Pressable>
@@ -89,8 +210,8 @@ const styles = StyleSheet.create({
   coverArt: {
     borderRadius: 32,
     gap: 6,
-    minHeight: 320,
     justifyContent: "flex-end",
+    minHeight: 320,
     padding: 24
   },
   coverTitle: {
@@ -103,11 +224,16 @@ const styles = StyleSheet.create({
     fontSize: 15
   },
   metaSection: {
-    gap: 4
+    gap: 6
   },
   storyEpisode: {
     color: theme.colors.textMuted,
     fontSize: 14
+  },
+  helperText: {
+    color: theme.colors.warning,
+    fontSize: 13,
+    fontWeight: "600"
   },
   timeline: {
     gap: 10
@@ -154,6 +280,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 72
   },
+  disabledButton: {
+    opacity: 0.45
+  },
   speedRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -197,5 +326,10 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: 18,
     fontWeight: "700"
+  },
+  loadingText: {
+    color: theme.colors.textMuted,
+    fontSize: 16,
+    fontWeight: "600"
   }
 });

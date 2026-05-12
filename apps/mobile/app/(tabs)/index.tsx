@@ -1,17 +1,20 @@
 import { Feather } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { EpisodeRow } from "../../components/episode-row";
 import { SectionHeader } from "../../components/section-header";
 import { StoryCard } from "../../components/story-card";
-import { browseTerms, continueListening, featuredSeries } from "../../constants/mock-data";
+import { browseTerms } from "../../constants/mock-data";
 import { theme } from "../../constants/theme";
+import { useStories } from "../../hooks/use-stories";
 
 export default function HomeScreen() {
-  const primarySeries = featuredSeries[0];
+  const { stories, isLoading } = useStories();
+
+  const openSeries = (seriesId: string) => {
+    router.push({ pathname: "/series/[id]", params: { id: seriesId } });
+  };
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -40,31 +43,12 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <LinearGradient colors={["#241023", "#4A1942", "#893168"]} style={styles.resumeCard}>
-          <Text style={styles.resumeLabel}>Tiếp tục nghe</Text>
-          <Text style={styles.resumeTitle}>{continueListening.title}</Text>
-          <Text style={styles.resumeEpisode}>{continueListening.episodeTitle}</Text>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${continueListening.progress * 100}%` }]} />
-          </View>
-          <Text style={styles.resumeMeta}>{continueListening.remainingLabel}</Text>
-        </LinearGradient>
-
         <View style={styles.section}>
-          <SectionHeader title="Mới cập nhật" />
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View style={styles.horizontalList}>
-              {featuredSeries.map((series) => (
-                <StoryCard key={series.id} series={series} />
-              ))}
-            </View>
-          </ScrollView>
-        </View>
-        <View style={styles.section}>
-          <SectionHeader title="Up next" />
-          <View style={styles.episodeList}>
-            {primarySeries.episodes.map((episode, index) => (
-              <EpisodeRow key={episode.id} episode={episode} highlighted={index === 0} />
+          <SectionHeader title="All stories" />
+          {isLoading ? <Text style={styles.helperText}>Đang tải danh sách truyện...</Text> : null}
+          <View style={styles.storyList}>
+            {stories.map((series) => (
+              <StoryCard key={series.id} compact onPress={() => openSeries(series.id)} series={series} />
             ))}
           </View>
         </View>
@@ -135,51 +119,15 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700"
   },
-  resumeCard: {
-    borderRadius: theme.radius.lg,
-    gap: 8,
-    padding: theme.spacing.lg
-  },
-  resumeLabel: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 13,
-    fontWeight: "700",
-    textTransform: "uppercase"
-  },
-  resumeTitle: {
-    color: "#FFFFFF",
-    fontSize: 24,
-    fontWeight: "800"
-  },
-  resumeEpisode: {
-    color: "#F9D7EA",
-    fontSize: 14
-  },
-  progressTrack: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-    borderRadius: theme.radius.pill,
-    height: 8,
-    marginTop: 10,
-    overflow: "hidden"
-  },
-  progressFill: {
-    backgroundColor: theme.colors.warning,
-    borderRadius: theme.radius.pill,
-    height: "100%"
-  },
-  resumeMeta: {
-    color: "#FFE7A8",
-    fontSize: 13,
-    fontWeight: "600"
-  },
   section: {
     gap: 14
   },
-  horizontalList: {
-    flexDirection: "row",
-    gap: theme.spacing.md
+  storyList: {
+    gap: theme.spacing.md,
+    width: "100%"
   },
-  episodeList: {
-    gap: 12
+  helperText: {
+    color: theme.colors.textMuted,
+    fontSize: 14
   }
 });

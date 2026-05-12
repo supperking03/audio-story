@@ -8,11 +8,6 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
-    "baseUrl": ".",
-    "paths": {
-      "@audio-story/db/*": [
-        "packages/db/src/*"
-      ]
-    }
+    "baseUrl": "."
   }
 }

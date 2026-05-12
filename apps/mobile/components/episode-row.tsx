@@ -1,17 +1,18 @@
 import { Feather } from "@expo/vector-icons";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import type { Episode } from "../constants/mock-data";
+import type { Episode } from "../data/story-service";
 import { theme } from "../constants/theme";
 
 type EpisodeRowProps = {
   episode: Episode;
   highlighted?: boolean;
+  onPress?: () => void;
 };
 
-export function EpisodeRow({ episode, highlighted = false }: EpisodeRowProps) {
+export function EpisodeRow({ episode, highlighted = false, onPress }: EpisodeRowProps) {
   return (
-    <Pressable style={[styles.row, highlighted && styles.highlighted]}>
+    <Pressable onPress={onPress} style={[styles.row, highlighted && styles.highlighted]}>
       <View style={styles.playIcon}>
         <Feather color={theme.colors.text} name="play" size={16} />
       </View>

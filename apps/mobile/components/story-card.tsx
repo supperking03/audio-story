@@ -1,30 +1,33 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import type { StorySeries } from "../constants/mock-data";
+import type { StorySeries } from "../data/story-service";
 import { theme } from "../constants/theme";
 
 type StoryCardProps = {
   series: StorySeries;
   compact?: boolean;
+  onPress?: () => void;
 };
 
-export function StoryCard({ series, compact = false }: StoryCardProps) {
+export function StoryCard({ series, compact = false, onPress }: StoryCardProps) {
   return (
-    <LinearGradient colors={series.coverColor} style={[styles.card, compact && styles.compactCard]}>
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>{series.latestEpisodeLabel}</Text>
-      </View>
-      <View style={styles.content}>
-        <Text style={styles.mood}>{series.mood}</Text>
-        <Text style={styles.title}>{series.title}</Text>
-        <View style={styles.metaRow}>
-          <Text style={styles.author}>{series.author}</Text>
-          <Text style={styles.dot}>•</Text>
-          <Text style={styles.author}>{series.tags[0]}</Text>
+    <Pressable onPress={onPress}>
+      <LinearGradient colors={series.coverColor} style={[styles.card, compact && styles.compactCard]}>
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{series.latestEpisodeLabel}</Text>
         </View>
-      </View>
-    </LinearGradient>
+        <View style={styles.content}>
+          <Text style={styles.mood}>{series.mood}</Text>
+          <Text style={styles.title}>{series.title}</Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.author}>{series.author}</Text>
+            <Text style={styles.dot}>•</Text>
+            <Text style={styles.author}>{series.tags[0]}</Text>
+          </View>
+        </View>
+      </LinearGradient>
+    </Pressable>
   );
 }
 

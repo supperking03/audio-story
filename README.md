@@ -1,16 +1,14 @@
-# Audio Story Workspace
+# Audio Story Mobile
 
-Monorepo scaffold for an audio-first romance story app.
+This repo now contains the Expo mobile app only.
 
-## Workspaces
-
-- `apps/mobile`: Expo React Native app
-- `packages/db`: Prisma schema and shared data contracts
-- `services/crawlers`: source-specific crawler and ingest scaffolds
-- `services/api`: reserved for future serving APIs
-
-## First next steps
+## Run
 
 1. Install dependencies with `npm install`
-2. Start mobile app with `npm run dev:mobile`
-3. Create `.env` files for database and crawler secrets before backend work
+2. Start the app with `npm run dev:mobile`
+
+## Related repo
+
+The web admin, shared API, Prisma schema, and crawler services were split into:
+
+- `/Users/kelvin/Downloads/audio-story-platform`

@@ -112,25 +112,6 @@ export const featuredSeries: StorySeries[] = [
   }
 ];
 
-export const continueListening = {
-  seriesId: "hay-nham-mat-khi-anh-den",
-  episodeId: "ep-41",
-  title: "Hãy Nhắm Mắt Khi Anh Đến",
-  episodeTitle: "Tập 41: Ánh đèn cuối hành lang",
-  progress: 0.68,
-  remainingLabel: "Còn 9 phút"
-};
-
-export const moodTags = [
-  "Ngọt sâu",
-  "Cưới trước yêu sau",
-  "Tổng tài",
-  "Cổ đại",
-  "Xuyên không",
-  "HE",
-  "Drama vừa"
-];
-
 export const browseTerms = [
   "Ngọt sâu",
   "Cổ đại",
@@ -141,6 +122,23 @@ export const browseTerms = [
   "Dài tập",
   "Hot hôm nay"
 ];
+
+export const nowPlaying = {
+  seriesId: "hay-nham-mat-khi-anh-den",
+  episodeId: "ep-41",
+  title: "Hãy Nhắm Mắt Khi Anh Đến",
+  episodeTitle: "Tập 41: Ánh đèn cuối hành lang",
+  progress: 0.68,
+  remainingLabel: "Còn 9 phút"
+};
+
+export function getSeriesById(seriesId: string) {
+  return featuredSeries.find((series) => series.id === seriesId);
+}
+
+export function getEpisodeById(seriesId: string, episodeId: string) {
+  return getSeriesById(seriesId)?.episodes.find((episode) => episode.id === episodeId);
+}
 
 export function searchSeries(query: string) {
   const normalized = query.trim().toLowerCase();

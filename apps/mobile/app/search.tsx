@@ -7,14 +7,17 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { EpisodeRow } from "../components/episode-row";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
-import { browseTerms, searchSeries } from "../constants/mock-data";
+import { browseTerms } from "../constants/mock-data";
 import { theme } from "../constants/theme";
+import { searchSeries } from "../data/story-service";
+import { useStories } from "../hooks/use-stories";
 
 export default function SearchScreen() {
   const params = useLocalSearchParams<{ query?: string }>();
   const [query, setQuery] = useState(params.query ?? "");
+  const { stories, isLoading } = useStories();
 
-  const results = useMemo(() => searchSeries(query), [query]);
+  const results = useMemo(() => searchSeries(stories, query), [query, stories]);
   const episodeResults = useMemo(() => {
     const normalized = query.trim().toLowerCase();
 
@@ -28,6 +31,14 @@ export default function SearchScreen() {
         .slice(0, 2)
     );
   }, [query, results]);
+
+  const openSeries = (seriesId: string) => {
+    router.push({ pathname: "/series/[id]", params: { id: seriesId } });
+  };
+
+  const openEpisode = (seriesId: string, episodeId: string) => {
+    router.push({ pathname: "/player", params: { seriesId, episodeId } });
+  };
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -61,9 +72,10 @@ export default function SearchScreen() {
 
         <View style={styles.section}>
           <SectionHeader title={query ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
+          {isLoading ? <Text style={styles.helperText}>Đang tải truyện...</Text> : null}
           <View style={styles.resultList}>
             {results.map((series) => (
-              <StoryCard key={series.id} compact series={series} />
+              <StoryCard key={series.id} compact onPress={() => openSeries(series.id)} series={series} />
             ))}
           </View>
         </View>
@@ -73,7 +85,18 @@ export default function SearchScreen() {
             <SectionHeader title="Tập liên quan" />
             <View style={styles.episodeList}>
               {episodeResults.map((episode) => (
-                <EpisodeRow key={episode.id} episode={episode} />
+                <EpisodeRow
+                  key={episode.id}
+                  episode={episode}
+                  onPress={() => {
+                    const parentSeries = results.find((series) =>
+                      series.episodes.some((seriesEpisode) => seriesEpisode.id === episode.id)
+                    );
+                    if (parentSeries) {
+                      openEpisode(parentSeries.id, episode.id);
+                    }
+                  }}
+                />
               ))}
             </View>
           </View>
@@ -173,6 +196,10 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   emptyText: {
+    color: theme.colors.textMuted,
+    fontSize: 14
+  },
+  helperText: {
     color: theme.colors.textMuted,
     fontSize: 14
   }

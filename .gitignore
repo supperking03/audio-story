@@ -9,4 +9,3 @@ coverage
 .env
 .env.*
 apps/mobile/.expo
-packages/db/generated
