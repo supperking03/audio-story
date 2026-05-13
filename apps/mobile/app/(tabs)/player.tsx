@@ -12,6 +12,20 @@ import { useStory } from "../../hooks/use-story";
 
 const speedOptions = ["0.8x", "1.0x", "1.2x", "1.5x", "2.0x"];
 
+function disableLockScreenControls(player: {
+  setActiveForLockScreen?: (active: boolean) => void;
+  clearLockScreenControls?: () => void;
+}) {
+  if (typeof player.clearLockScreenControls === "function") {
+    player.clearLockScreenControls();
+    return;
+  }
+
+  if (typeof player.setActiveForLockScreen === "function") {
+    player.setActiveForLockScreen(false);
+  }
+}
+
 function formatClock(seconds?: number) {
   if (!seconds || Number.isNaN(seconds)) {
     return "00:00";
@@ -39,15 +53,49 @@ export default function PlayerScreen() {
   }, [baseSeries, params.episodeId]);
   const player = useAudioPlayer(currentEpisode?.audioUrl ?? null, { updateInterval: 500 });
   const status = useAudioPlayerStatus(player);
+  const hasAudio = Boolean(currentEpisode?.audioUrl);
 
   useEffect(() => {
     setAudioModeAsync({
       playsInSilentMode: true,
-      shouldPlayInBackground: false
+      shouldPlayInBackground: true,
+      interruptionMode: "doNotMix"
     }).catch(() => {
       // Keep the player usable even if audio mode config fails on a simulator/device.
     });
   }, []);
+
+  useEffect(() => {
+    if (!hasAudio) {
+      disableLockScreenControls(player);
+      return;
+    }
+
+    player.setActiveForLockScreen(
+      true,
+      {
+        title: currentEpisode?.title ?? nowPlaying.episodeTitle,
+        artist: baseSeries?.title ?? nowPlaying.title,
+        artworkUrl: baseSeries?.coverImageUrl ?? undefined
+      },
+      {
+        showSeekBackward: true,
+        showSeekForward: true
+      }
+    );
+
+    return () => {
+      disableLockScreenControls(player);
+    };
+  }, [
+    baseSeries?.coverImageUrl,
+    baseSeries?.title,
+    currentEpisode?.title,
+    hasAudio,
+    nowPlaying.episodeTitle,
+    nowPlaying.title,
+    player
+  ]);
 
   useEffect(() => {
     player.setPlaybackRate(Number.parseFloat(selectedSpeed), "medium");
@@ -55,7 +103,6 @@ export default function PlayerScreen() {
 
   const episodeIndex = baseSeries?.episodes.findIndex((episode) => episode.id === currentEpisode?.id) ?? -1;
   const progress = status.duration > 0 ? status.currentTime / status.duration : nowPlaying.progress;
-  const hasAudio = Boolean(currentEpisode?.audioUrl);
 
   const changeEpisode = (direction: -1 | 1) => {
     if (!baseSeries || episodeIndex < 0) {

@@ -5,6 +5,7 @@ import { loadStoryById, type StorySeries } from "../data/story-service";
 export function useStory(id?: string) {
   const [story, setStory] = useState<StorySeries | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -12,16 +13,29 @@ export function useStory(id?: string) {
     async function run() {
       if (!id) {
         setStory(null);
+        setError(null);
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
-      const nextStory = await loadStoryById(id);
+      setError(null);
 
-      if (isMounted) {
-        setStory(nextStory);
-        setIsLoading(false);
+      try {
+        const nextStory = await loadStoryById(id);
+
+        if (isMounted) {
+          setStory(nextStory);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setStory(null);
+          setError(err instanceof Error ? err.message : "Không tải được series từ API.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
 
@@ -32,5 +46,5 @@ export function useStory(id?: string) {
     };
   }, [id]);
 
-  return { story, isLoading };
+  return { story, isLoading, error };
 }

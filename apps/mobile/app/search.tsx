@@ -15,7 +15,7 @@ import { useStories } from "../hooks/use-stories";
 export default function SearchScreen() {
   const params = useLocalSearchParams<{ query?: string }>();
   const [query, setQuery] = useState(params.query ?? "");
-  const { stories, isLoading } = useStories();
+  const { stories, isLoading, error } = useStories();
 
   const results = useMemo(() => searchSeries(stories, query), [query, stories]);
   const episodeResults = useMemo(() => {
@@ -73,6 +73,7 @@ export default function SearchScreen() {
         <View style={styles.section}>
           <SectionHeader title={query ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
           {isLoading ? <Text style={styles.helperText}>Đang tải truyện...</Text> : null}
+          {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
           <View style={styles.resultList}>
             {results.map((series) => (
               <StoryCard key={series.id} compact onPress={() => openSeries(series.id)} series={series} />
@@ -202,5 +203,10 @@ const styles = StyleSheet.create({
   helperText: {
     color: theme.colors.textMuted,
     fontSize: 14
+  },
+  errorText: {
+    color: theme.colors.warning,
+    fontSize: 13,
+    lineHeight: 19
   }
 });

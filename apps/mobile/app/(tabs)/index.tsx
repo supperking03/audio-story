@@ -10,7 +10,7 @@ import { theme } from "../../constants/theme";
 import { useStories } from "../../hooks/use-stories";
 
 export default function HomeScreen() {
-  const { stories, isLoading } = useStories();
+  const { stories, isLoading, error } = useStories();
 
   const openSeries = (seriesId: string) => {
     router.push({ pathname: "/series/[id]", params: { id: seriesId } });
@@ -46,6 +46,10 @@ export default function HomeScreen() {
         <View style={styles.section}>
           <SectionHeader title="All stories" />
           {isLoading ? <Text style={styles.helperText}>Đang tải danh sách truyện...</Text> : null}
+          {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
+          {!isLoading && !error && stories.length === 0 ? (
+            <Text style={styles.helperText}>API đang chạy nhưng chưa có truyện nào.</Text>
+          ) : null}
           <View style={styles.storyList}>
             {stories.map((series) => (
               <StoryCard key={series.id} compact onPress={() => openSeries(series.id)} series={series} />
@@ -129,5 +133,10 @@ const styles = StyleSheet.create({
   helperText: {
     color: theme.colors.textMuted,
     fontSize: 14
+  },
+  errorText: {
+    color: theme.colors.warning,
+    fontSize: 13,
+    lineHeight: 19
   }
 });

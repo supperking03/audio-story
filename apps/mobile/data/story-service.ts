@@ -1,4 +1,4 @@
-import { featuredSeries, nowPlaying as fallbackNowPlaying } from "../constants/mock-data";
+import { nowPlaying as fallbackNowPlaying } from "../constants/mock-data";
 import { fetchJson } from "../lib/api";
 
 export type Episode = {
@@ -134,24 +134,13 @@ function mapStory(story: ApiStory): StorySeries {
 }
 
 export async function loadStories() {
-  try {
-    const data = await fetchJson<{ stories: ApiStory[] }>("/api/stories");
-    if (data.stories.length === 0) {
-      return featuredSeries;
-    }
-    return data.stories.map(mapStory);
-  } catch {
-    return featuredSeries;
-  }
+  const data = await fetchJson<{ stories: ApiStory[] }>("/api/stories");
+  return data.stories.map(mapStory);
 }
 
 export async function loadStoryById(id: string) {
-  try {
-    const data = await fetchJson<{ story: ApiStory }>(`/api/stories/${id}`);
-    return mapStory(data.story);
-  } catch {
-    return featuredSeries.find((series) => series.id === id) ?? null;
-  }
+  const data = await fetchJson<{ story: ApiStory }>(`/api/stories/${id}`);
+  return mapStory(data.story);
 }
 
 export function searchSeries(seriesList: StorySeries[], query: string) {

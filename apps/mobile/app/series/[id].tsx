@@ -10,7 +10,7 @@ import { useStory } from "../../hooks/use-story";
 
 export default function SeriesDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
-  const { story: series, isLoading } = useStory(params.id);
+  const { story: series, isLoading, error } = useStory(params.id);
 
   if (isLoading) {
     return (
@@ -26,7 +26,8 @@ export default function SeriesDetailScreen() {
     return (
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         <View style={styles.missingState}>
-          <Text style={styles.missingTitle}>Không tìm thấy truyện</Text>
+          <Text style={styles.missingTitle}>{error ? "Không tải được truyện" : "Không tìm thấy truyện"}</Text>
+          {error ? <Text style={styles.loadingText}>Lỗi API: {error}</Text> : null}
           <Pressable onPress={() => router.back()} style={styles.backInline}>
             <Text style={styles.backInlineText}>Quay lại</Text>
           </Pressable>

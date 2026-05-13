@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 
-const fallbackBaseUrl = "http://192.168.1.145:3000";
+const fallbackBaseUrl = "http://192.168.101.42:3000";
 
 function getExpoHost() {
   const hostUri =
@@ -18,7 +18,7 @@ function getExpoHost() {
 export function getApiBaseUrl() {
   const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
   if (envUrl) {
-    return envUrl;
+    return envUrl.replace(/\/$/, "");
   }
 
   const expoHost = getExpoHost();
@@ -30,10 +30,11 @@ export function getApiBaseUrl() {
 }
 
 export async function fetchJson<T>(path: string) {
-  const response = await fetch(`${getApiBaseUrl()}${path}`);
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}${path}`);
 
   if (!response.ok) {
-    throw new Error(`Request failed: ${response.status}`);
+    throw new Error(`Request failed: ${response.status} (${baseUrl}${path})`);
   }
 
   return (await response.json()) as T;
