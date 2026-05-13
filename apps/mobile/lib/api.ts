@@ -1,6 +1,6 @@
 import Constants from "expo-constants";
 
-const fallbackBaseUrl = "http://192.168.101.42:3000";
+const fallbackBaseUrl = "http://192.168.1.151:3000";
 
 function getExpoHost() {
   const hostUri =
@@ -19,6 +19,11 @@ export function getApiBaseUrl() {
   const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
   if (envUrl) {
     return envUrl.replace(/\/$/, "");
+  }
+
+  const configUrl = Constants.expoConfig?.extra?.apiBaseUrl;
+  if (typeof configUrl === "string" && configUrl) {
+    return configUrl.replace(/\/$/, "");
   }
 
   const expoHost = getExpoHost();

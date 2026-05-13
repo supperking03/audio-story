@@ -16,13 +16,17 @@ function disableLockScreenControls(player: {
   setActiveForLockScreen?: (active: boolean) => void;
   clearLockScreenControls?: () => void;
 }) {
-  if (typeof player.clearLockScreenControls === "function") {
-    player.clearLockScreenControls();
-    return;
-  }
+  try {
+    if (typeof player.clearLockScreenControls === "function") {
+      player.clearLockScreenControls();
+      return;
+    }
 
-  if (typeof player.setActiveForLockScreen === "function") {
-    player.setActiveForLockScreen(false);
+    if (typeof player.setActiveForLockScreen === "function") {
+      player.setActiveForLockScreen(false);
+    }
+  } catch {
+    // Native player may already be released when component unmounts.
   }
 }
 
