@@ -1,13 +1,14 @@
 import { Feather } from "@expo/vector-icons";
-import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
+import { setAudioModeAsync, useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { theme } from "../../constants/theme";
 import { getFallbackNowPlaying } from "../../data/story-service";
+import { useSingletonPlayer } from "../../hooks/use-singleton-player";
 import { useStory } from "../../hooks/use-story";
 
 const speedOptions = ["0.8x", "1.0x", "1.2x", "1.5x", "2.0x"];
@@ -48,6 +49,7 @@ export default function PlayerScreen() {
   const seriesId = params.seriesId ?? nowPlaying.seriesId;
   const { story: baseSeries, isLoading } = useStory(seriesId);
   const [selectedSpeed, setSelectedSpeed] = useState("1.2x");
+  const [showEpisodes, setShowEpisodes] = useState(false);
   const currentEpisode = useMemo(() => {
     if (params.episodeId) {
       return baseSeries?.episodes.find((episode) => episode.id === params.episodeId) ?? null;
@@ -55,7 +57,7 @@ export default function PlayerScreen() {
 
     return baseSeries?.episodes[0] ?? null;
   }, [baseSeries, params.episodeId]);
-  const player = useAudioPlayer(currentEpisode?.audioUrl ?? null, { updateInterval: 500 });
+  const player = useSingletonPlayer(currentEpisode?.audioUrl ?? null, currentEpisode?.id ?? null);
   const status = useAudioPlayerStatus(player);
   const hasAudio = Boolean(currentEpisode?.audioUrl);
 
@@ -213,8 +215,45 @@ export default function PlayerScreen() {
 
         <View style={styles.utilityRow}>
           <UtilityTile label="Audio" value={hasAudio ? "Ready" : "Pending"} />
-          <UtilityTile label="Episodes" value={`${baseSeries?.episodes.length ?? 0}`} />
+          <UtilityTile
+            label="Episodes"
+            value={`${baseSeries?.episodes.length ?? 0}`}
+            onPress={baseSeries ? () => setShowEpisodes(true) : undefined}
+          />
         </View>
+
+        <Modal animationType="slide" transparent visible={showEpisodes} onRequestClose={() => setShowEpisodes(false)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowEpisodes(false)} />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Danh sách tập</Text>
+            <FlatList
+              data={baseSeries?.episodes ?? []}
+              keyExtractor={(ep) => ep.id}
+              contentContainerStyle={styles.sheetList}
+              renderItem={({ item: ep }) => {
+                const isCurrent = ep.id === currentEpisode?.id;
+                return (
+                  <Pressable
+                    style={[styles.sheetRow, isCurrent && styles.sheetRowActive]}
+                    onPress={() => {
+                      setShowEpisodes(false);
+                      router.replace({ pathname: "/player", params: { seriesId: baseSeries!.id, episodeId: ep.id } });
+                    }}
+                  >
+                    <View style={[styles.sheetPlayIcon, isCurrent && styles.sheetPlayIconActive]}>
+                      <Feather color={isCurrent ? "#11131C" : theme.colors.text} name={isCurrent && status.playing ? "pause" : "play"} size={14} />
+                    </View>
+                    <View style={styles.sheetCopy}>
+                      <Text style={[styles.sheetEpTitle, isCurrent && styles.sheetEpTitleActive]}>{ep.title}</Text>
+                      <Text style={[styles.sheetEpMeta, isCurrent && styles.sheetEpMetaActive]}>{ep.durationLabel} • {ep.publishedAt}</Text>
+                    </View>
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -239,12 +278,15 @@ function ControlButton({
   );
 }
 
-function UtilityTile({ label, value }: { label: string; value: string }) {
+function UtilityTile({ label, value, onPress }: { label: string; value: string; onPress?: () => void }) {
   return (
-    <View style={styles.utilityTile}>
+    <Pressable disabled={!onPress} onPress={onPress} style={[styles.utilityTile, !!onPress && styles.utilityTileTappable]}>
       <Text style={styles.utilityLabel}>{label}</Text>
-      <Text style={styles.utilityValue}>{value}</Text>
-    </View>
+      <View style={styles.utilityValueRow}>
+        <Text style={styles.utilityValue}>{value}</Text>
+        {onPress ? <Feather color={theme.colors.textMuted} name="chevron-right" size={16} /> : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -373,10 +415,90 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 13
   },
+  utilityValueRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4
+  },
   utilityValue: {
     color: theme.colors.text,
     fontSize: 18,
     fontWeight: "700"
+  },
+  utilityTileTappable: {
+    borderColor: theme.colors.accent
+  },
+  modalBackdrop: {
+    backgroundColor: "rgba(0,0,0,0.55)",
+    flex: 1
+  },
+  sheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    maxHeight: "70%",
+    paddingBottom: 32,
+    paddingTop: 12
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    backgroundColor: theme.colors.line,
+    borderRadius: theme.radius.pill,
+    height: 4,
+    marginBottom: 16,
+    width: 40
+  },
+  sheetTitle: {
+    color: theme.colors.text,
+    fontSize: 17,
+    fontWeight: "700",
+    marginBottom: 12,
+    paddingHorizontal: theme.spacing.lg
+  },
+  sheetList: {
+    gap: 8,
+    paddingHorizontal: theme.spacing.lg
+  },
+  sheetRow: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surfaceElevated,
+    borderRadius: theme.radius.md,
+    flexDirection: "row",
+    gap: 12,
+    padding: theme.spacing.md
+  },
+  sheetRowActive: {
+    backgroundColor: theme.colors.accent
+  },
+  sheetPlayIcon: {
+    alignItems: "center",
+    backgroundColor: theme.colors.card,
+    borderRadius: theme.radius.pill,
+    height: 36,
+    justifyContent: "center",
+    width: 36
+  },
+  sheetPlayIconActive: {
+    backgroundColor: "rgba(0,0,0,0.2)"
+  },
+  sheetCopy: {
+    flex: 1,
+    gap: 3
+  },
+  sheetEpTitle: {
+    color: theme.colors.text,
+    fontSize: 14,
+    fontWeight: "700"
+  },
+  sheetEpTitleActive: {
+    color: "#11131C"
+  },
+  sheetEpMeta: {
+    color: theme.colors.textMuted,
+    fontSize: 12
+  },
+  sheetEpMetaActive: {
+    color: "rgba(17, 19, 28, 0.6)"
   },
   loadingText: {
     color: theme.colors.textMuted,
