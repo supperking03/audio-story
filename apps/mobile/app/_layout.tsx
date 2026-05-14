@@ -1,5 +1,7 @@
-import { Stack } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AudioSessionManager } from "../components/audio-session-manager";
@@ -7,6 +9,12 @@ import { MiniPlayer } from "../components/mini-player";
 import { PlayerMetaProvider } from "../contexts/player-context";
 
 export default function RootLayout() {
+  useEffect(() => {
+    AsyncStorage.getItem("bubu_onboarding_done").then((done) => {
+      if (!done) router.replace("/onboarding");
+    });
+  }, []);
+
   return (
     <PlayerMetaProvider>
       <StatusBar style="light" />

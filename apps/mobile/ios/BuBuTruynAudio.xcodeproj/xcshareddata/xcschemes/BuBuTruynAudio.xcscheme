@@ -15,9 +15,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-               BuildableName = "AudioStory.app"
-               BlueprintName = "AudioStory"
-               ReferencedContainer = "container:AudioStory.xcodeproj">
+               BuildableName = "BuBuTruynAudio.app"
+               BlueprintName = "BuBuTruynAudio"
+               ReferencedContainer = "container:BuBuTruynAudio.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -33,9 +33,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "00E356ED1AD99517003FC87E"
-               BuildableName = "AudioStoryTests.xctest"
-               BlueprintName = "AudioStoryTests"
-               ReferencedContainer = "container:AudioStory.xcodeproj">
+               BuildableName = "BuBuTruynAudioTests.xctest"
+               BlueprintName = "BuBuTruynAudioTests"
+               ReferencedContainer = "container:BuBuTruynAudio.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -55,9 +55,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "AudioStory.app"
-            BlueprintName = "AudioStory"
-            ReferencedContainer = "container:AudioStory.xcodeproj">
+            BuildableName = "BuBuTruynAudio.app"
+            BlueprintName = "BuBuTruynAudio"
+            ReferencedContainer = "container:BuBuTruynAudio.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -72,9 +72,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
-            BuildableName = "AudioStory.app"
-            BlueprintName = "AudioStory"
-            ReferencedContainer = "container:AudioStory.xcodeproj">
+            BuildableName = "BuBuTruynAudio.app"
+            BlueprintName = "BuBuTruynAudio"
+            ReferencedContainer = "container:BuBuTruynAudio.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

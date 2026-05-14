@@ -20,18 +20,17 @@ export default function HomeScreen() {
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.heroHeader}>
-          <Text style={styles.kicker}>Audio Story</Text>
-          <Text style={styles.title}>Khám phá</Text>
+          <Text style={styles.appName}>BuBu</Text>
+          <Text style={styles.appSub}>Nghe truyện ngôn tình & trinh thám</Text>
         </View>
 
         <View style={styles.searchSection}>
-          <SectionHeader title="Tìm kiếm" />
           <Pressable onPress={() => router.push("/search")} style={styles.searchBox}>
             <Feather color={theme.colors.textMuted} name="search" size={18} />
             <Text style={styles.placeholder}>Tên truyện, tác giả, mood...</Text>
           </Pressable>
           <View style={styles.filterRow}>
-            {browseTerms.map((term) => (
+            {browseTerms.slice(0, 5).map((term) => (
               <Pressable
                 key={term}
                 onPress={() => router.push({ pathname: "/search", params: { query: term } })}
@@ -72,24 +71,23 @@ const styles = StyleSheet.create({
     paddingBottom: 140
   },
   heroHeader: {
-    gap: 10,
+    gap: 4,
     marginTop: 8
+  },
+  appName: {
+    color: theme.colors.accent,
+    fontSize: 42,
+    fontWeight: "900",
+    letterSpacing: -1,
+    lineHeight: 46
+  },
+  appSub: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    marginTop: 2
   },
   searchSection: {
     gap: 14
-  },
-  kicker: {
-    color: theme.colors.accentSoft,
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase"
-  },
-  title: {
-    color: theme.colors.text,
-    fontSize: 38,
-    fontWeight: "800",
-    lineHeight: 42
   },
   searchBox: {
     alignItems: "center",
