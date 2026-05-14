@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hỗ trợ — BuBu: Truyện Audio</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0A0B11;
+      color: #F3F4F8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.7;
+    }
+
+    a { color: #FF7A59; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 40px;
+      border-bottom: 1px solid #2A2F43;
+    }
+    .nav-logo { font-size: 22px; font-weight: 900; color: #FF7A59; letter-spacing: -0.5px; }
+    .nav-links { display: flex; gap: 28px; font-size: 14px; font-weight: 600; }
+    .nav-links a { color: #A6AAB9; }
+    .nav-links a:hover { color: #F3F4F8; text-decoration: none; }
+
+    .page {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 64px 24px 100px;
+    }
+
+    .page-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: #FF7A59;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 38px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+    }
+    .lead {
+      font-size: 16px;
+      color: #A6AAB9;
+      margin-bottom: 56px;
+    }
+
+    /* FAQ */
+    .faq-group { margin-bottom: 48px; }
+    .faq-group-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #A6AAB9;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #2A2F43;
+    }
+    details {
+      border: 1px solid #2A2F43;
+      border-radius: 14px;
+      margin-bottom: 8px;
+      overflow: hidden;
+    }
+    summary {
+      padding: 18px 20px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #11131C;
+      user-select: none;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after {
+      content: "+";
+      font-size: 20px;
+      color: #A6AAB9;
+      flex-shrink: 0;
+      margin-left: 12px;
+    }
+    details[open] summary::after { content: "−"; }
+    details[open] summary { border-bottom: 1px solid #2A2F43; }
+    .answer {
+      padding: 16px 20px;
+      font-size: 14px;
+      color: #A6AAB9;
+      background: #11131C;
+    }
+    .answer p + p { margin-top: 10px; }
+
+    /* Contact card */
+    .contact-card {
+      background: #11131C;
+      border: 1px solid #2A2F43;
+      border-radius: 18px;
+      padding: 32px;
+      margin-top: 48px;
+      text-align: center;
+    }
+    .contact-card h2 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+    .contact-card p { font-size: 14px; color: #A6AAB9; margin-bottom: 24px; }
+    .btn-email {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #FF7A59;
+      color: #11131C;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 12px 24px;
+      border-radius: 999px;
+    }
+    .btn-email:hover { opacity: .88; text-decoration: none; }
+
+    footer {
+      border-top: 1px solid #2A2F43;
+      padding: 32px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 13px;
+      color: #A6AAB9;
+    }
+    .footer-links { display: flex; gap: 24px; }
+
+    @media (max-width: 600px) {
+      nav { padding: 16px 20px; }
+      h1 { font-size: 28px; }
+      footer { padding: 24px 20px; flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a class="nav-logo" href="index.html">BuBu</a>
+  <div class="nav-links">
+    <a href="support.html" style="color:#F3F4F8">Hỗ trợ</a>
+    <a href="privacy.html">Chính sách</a>
+  </div>
+</nav>
+
+<div class="page">
+  <p class="page-label">Trung tâm hỗ trợ</p>
+  <h1>Chúng tôi có thể giúp gì cho bạn?</h1>
+  <p class="lead">Tìm câu trả lời nhanh bên dưới hoặc gửi email cho chúng tôi bất cứ lúc nào.</p>
+
+  <!-- Phát audio -->
+  <div class="faq-group">
+    <p class="faq-group-title">🎧 Phát audio</p>
+
+    <details>
+      <summary>Âm thanh không phát được, phải làm gì?</summary>
+      <div class="answer">
+        <p>Hãy thử các bước sau:</p>
+        <p>1. Kiểm tra âm lượng thiết bị và gạt công tắc im lặng (iPhone).</p>
+        <p>2. Thoát hoàn toàn ứng dụng rồi mở lại.</p>
+        <p>3. Kiểm tra kết nối internet nếu bạn chưa tải về offline.</p>
+        <p>4. Khởi động lại thiết bị.</p>
+        <p>Nếu vẫn không được, vui lòng liên hệ chúng tôi qua email bên dưới.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>App có phát nhạc nền khi khoá màn hình không?</summary>
+      <div class="answer">
+        <p>Có. BuBu hỗ trợ phát nền đầy đủ — bạn có thể khoá màn hình, dùng app khác và audio vẫn tiếp tục chạy.</p>
+        <p>Điều khiển phát/dừng cũng hiển thị trực tiếp trên màn hình khoá và Control Center.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Làm sao thay đổi tốc độ nghe?</summary>
+      <div class="answer">
+        <p>Trong màn hình Player, chọn tốc độ mong muốn ở hàng nút bên dưới: <strong>0.8×, 1.0×, 1.2×, 1.5×, 2.0×</strong>.</p>
+        <p>Mặc định là 1.2× để nghe rõ hơn mà không quá nhanh.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Tại sao tập vừa chọn bị phát lại từ đầu?</summary>
+      <div class="answer">
+        <p>Mỗi khi bạn chuyển sang một tập mới, ứng dụng sẽ tự động phát từ đầu tập đó.</p>
+        <p>Nếu bạn quay lại tập đang nghe dở, tiến độ sẽ được giữ nguyên.</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- Nội dung -->
+  <div class="faq-group">
+    <p class="faq-group-title">📚 Nội dung & truyện</p>
+
+    <details>
+      <summary>BuBu có những thể loại truyện nào?</summary>
+      <div class="answer">
+        <p>Hiện tại BuBu có: <strong>Ngôn tình, Trinh thám, Kinh dị, Cổ đại, Hiện đại, Tiên hiệp, Chữa lành</strong> và nhiều thể loại khác đang được bổ sung.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Truyện có được cập nhật thường xuyên không?</summary>
+      <div class="answer">
+        <p>Có, tập mới được thêm liên tục. Các series đang phát sóng sẽ ra tập mới hàng ngày hoặc vài ngày một lần.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Tôi muốn đề xuất thêm truyện mới, làm thế nào?</summary>
+      <div class="answer">
+        <p>Gửi email cho chúng tôi tại <a href="mailto:kiengo.uit@gmail.com">kiengo.uit@gmail.com</a> với tiêu đề <strong>"Đề xuất truyện"</strong> và tên truyện bạn muốn nghe. Chúng tôi luôn lắng nghe!</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- Tài khoản -->
+  <div class="faq-group">
+    <p class="faq-group-title">⚙️ Ứng dụng & tài khoản</p>
+
+    <details>
+      <summary>App có miễn phí không?</summary>
+      <div class="answer">
+        <p>BuBu hoàn toàn miễn phí để tải và sử dụng. Không có phí ẩn hay đăng ký bắt buộc.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>App có cần tài khoản để sử dụng không?</summary>
+      <div class="answer">
+        <p>Không. BuBu không yêu cầu đăng ký hay đăng nhập. Bạn mở app là nghe được ngay.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Làm sao để báo lỗi hoặc góp ý về ứng dụng?</summary>
+      <div class="answer">
+        <p>Gửi email mô tả lỗi hoặc góp ý đến <a href="mailto:kiengo.uit@gmail.com">kiengo.uit@gmail.com</a>. Vui lòng đính kèm loại thiết bị và phiên bản iOS để chúng tôi hỗ trợ nhanh hơn.</p>
+      </div>
+    </details>
+  </div>
+
+  <!-- Contact card -->
+  <div class="contact-card">
+    <h2>Vẫn cần thêm trợ giúp?</h2>
+    <p>Đội ngũ BuBu sẽ phản hồi trong vòng 24–48 giờ làm việc.</p>
+    <a class="btn-email" href="mailto:kiengo.uit@gmail.com">
+      ✉️ &nbsp;kiengo.uit@gmail.com
+    </a>
+  </div>
+</div>
+
+<footer>
+  <span>© 2025 BuBu: Truyện Audio</span>
+  <div class="footer-links">
+    <a href="index.html">Trang chủ</a>
+    <a href="privacy.html">Chính sách bảo mật</a>
+  </div>
+</footer>
+
+</body>
+</html>
