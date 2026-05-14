@@ -1,8 +1,9 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { LoadingIndicator } from "../components/loading-indicator";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
 import { browseTerms } from "../constants/mock-data";
@@ -11,7 +12,7 @@ import { useResponsive } from "../hooks/use-responsive";
 import { useStories } from "../hooks/use-stories";
 
 export default function HomeScreen() {
-  const { stories, isLoading, error } = useStories();
+  const { stories, isLoading, isRefreshing, error, refresh } = useStories();
   const { isTablet, hPad } = useResponsive();
 
   const openSeries = (seriesId: string) => {
@@ -20,7 +21,18 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: hPad }]}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingHorizontal: hPad }]}
+        refreshControl={
+          <RefreshControl
+            onRefresh={() => {
+              void refresh(true);
+            }}
+            refreshing={isRefreshing}
+            tintColor={theme.colors.accent}
+          />
+        }
+      >
         <View style={styles.heroHeader}>
           <Text style={styles.appName}>BuBu</Text>
           <Text style={styles.appSub}>Nghe truyện ngôn tình & trinh thám</Text>
@@ -46,7 +58,7 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <SectionHeader title="Tất cả truyện" />
-          {isLoading ? <Text style={styles.helperText}>Đang tải danh sách truyện...</Text> : null}
+          {isLoading ? <LoadingIndicator label="Đang tải danh sách truyện..." /> : null}
           {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
           {!isLoading && !error && stories.length === 0 ? (
             <Text style={styles.helperText}>API đang chạy nhưng chưa có truyện nào.</Text>

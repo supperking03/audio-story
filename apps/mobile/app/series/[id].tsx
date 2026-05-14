@@ -6,6 +6,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EpisodeRow } from "../../components/episode-row";
+import { LoadingIndicator } from "../../components/loading-indicator";
 import { theme } from "../../constants/theme";
 import { useResponsive } from "../../hooks/use-responsive";
 import { useStory } from "../../hooks/use-story";
@@ -23,6 +24,7 @@ export default function SeriesDetailScreen() {
   const { story: series, isLoading, error } = useStory(params.id);
   const { isTablet, hPad } = useResponsive();
   const [savedProgress, setSavedProgress] = useState<SavedProgress | null>(null);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
   useEffect(() => {
     if (!params.id) return;
@@ -35,7 +37,7 @@ export default function SeriesDetailScreen() {
     return (
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         <View style={styles.missingState}>
-          <Text style={styles.loadingText}>Đang tải series...</Text>
+          <LoadingIndicator centered label="Đang tải series..." />
         </View>
       </SafeAreaView>
     );
@@ -76,7 +78,16 @@ export default function SeriesDetailScreen() {
         </LinearGradient>
 
         {series.description ? (
-          <Text style={styles.description}>{series.description}</Text>
+          <View style={styles.descriptionBlock}>
+            <Text numberOfLines={isDescriptionExpanded ? undefined : 4} style={styles.description}>
+              {series.description}
+            </Text>
+            {series.description.length > 140 ? (
+              <Pressable onPress={() => setIsDescriptionExpanded((value) => !value)} style={styles.expandButton}>
+                <Text style={styles.expandButtonText}>{isDescriptionExpanded ? "Thu gọn" : "Xem thêm"}</Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : null}
 
         <Modal
@@ -297,6 +308,17 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 15,
     lineHeight: 22
+  },
+  descriptionBlock: {
+    gap: 10
+  },
+  expandButton: {
+    alignSelf: "flex-start"
+  },
+  expandButtonText: {
+    color: theme.colors.accent,
+    fontSize: 14,
+    fontWeight: "700"
   },
   section: {
     gap: 12

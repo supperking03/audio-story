@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EpisodeRow } from "../components/episode-row";
+import { LoadingIndicator } from "../components/loading-indicator";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
 import { browseTerms } from "../constants/mock-data";
@@ -74,7 +75,7 @@ export default function SearchScreen() {
 
         <View style={styles.section}>
           <SectionHeader title={query ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
-          {isLoading ? <Text style={styles.helperText}>Đang tải truyện...</Text> : null}
+          {isLoading ? <LoadingIndicator label="Đang tải truyện..." /> : null}
           {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
           <View style={[styles.resultList, isTablet && styles.resultListTablet]}>
             {results.map((series) => (

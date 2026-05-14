@@ -6,7 +6,7 @@ let _currentEpisodeId: string | null = null;
 
 export function getPlayer(): AudioPlayer {
   if (!_player) {
-    _player = createAudioPlayer(null, 500);
+    _player = createAudioPlayer();
   }
   return _player;
 }

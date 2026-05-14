@@ -3,9 +3,10 @@ import { useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Animated, FlatList, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, FlatList, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { LoadingIndicator } from "../components/loading-indicator";
 import { usePlayerMeta } from "../contexts/player-context";
 import { theme } from "../constants/theme";
 import { getFallbackNowPlaying } from "../data/story-service";
@@ -14,7 +15,7 @@ import { useSingletonPlayer } from "../hooks/use-singleton-player";
 import { useStory } from "../hooks/use-story";
 import { clearProgress, saveProgress } from "../lib/playback-store";
 
-const speedOptions = ["0.8x", "1.0x", "1.2x", "1.5x", "2.0x"];
+const speedOptions = ["0.8x", "1.0x", "1.1x", "1.2x", "1.3x", "1.5x", "2.0x"];
 
 
 function formatClock(seconds?: number) {
@@ -40,19 +41,37 @@ export default function PlayerScreen() {
   const [selectedSpeed, setSelectedSpeed] = useState("1.2x");
   const [showEpisodes, setShowEpisodes] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(params.episodeId ?? null);
+  const [isEpisodeSwitching, setIsEpisodeSwitching] = useState(false);
   const { setMeta } = usePlayerMeta();
 
+  useEffect(() => {
+    setCurrentEpisodeId(params.episodeId ?? null);
+  }, [params.episodeId]);
+
   const currentEpisode = useMemo(() => {
-    if (params.episodeId) {
-      return baseSeries?.episodes.find((episode) => episode.id === params.episodeId) ?? null;
+    if (currentEpisodeId) {
+      return baseSeries?.episodes.find((episode) => episode.id === currentEpisodeId) ?? null;
     }
 
     return baseSeries?.episodes[0] ?? null;
-  }, [baseSeries, params.episodeId]);
+  }, [baseSeries, currentEpisodeId]);
 
   const player = useSingletonPlayer(currentEpisode?.audioUrl ?? null, currentEpisode?.id ?? null);
   const status = useAudioPlayerStatus(player);
   const hasAudio = Boolean(currentEpisode?.audioUrl);
+
+  useEffect(() => {
+    if (!isEpisodeSwitching || !currentEpisode) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setIsEpisodeSwitching(false);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [currentEpisode?.id, isEpisodeSwitching]);
 
   // Persist current episode meta for the mini player and lock screen (via AudioSessionManager)
   useEffect(() => {
@@ -182,10 +201,8 @@ export default function PlayerScreen() {
     if (!baseSeries || episodeIndex < 0) return;
     const nextEpisode = baseSeries.episodes[episodeIndex + direction];
     if (!nextEpisode) return;
-    router.replace({
-      pathname: "/player",
-      params: { seriesId: baseSeries.id, episodeId: nextEpisode.id }
-    });
+    setIsEpisodeSwitching(true);
+    setCurrentEpisodeId(nextEpisode.id);
   };
 
   const togglePlayback = async () => {
@@ -212,7 +229,7 @@ export default function PlayerScreen() {
     return (
       <SafeAreaView edges={["top"]} style={styles.safeArea}>
         <View style={styles.content}>
-          <Text style={styles.loadingText}>Đang tải audio...</Text>
+          <LoadingIndicator centered label="Đang tải audio..." />
         </View>
       </SafeAreaView>
     );
@@ -220,11 +237,23 @@ export default function PlayerScreen() {
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      {/* Drag handle for modal-style dismiss hint */}
-      <View style={styles.handle} />
-
       <View style={[styles.content, isTablet && { paddingHorizontal: hPad }]}>
+        <View style={styles.headerRow}>
+          <Pressable onPress={() => router.back()} style={styles.backButton}>
+            <Feather color={theme.colors.text} name="arrow-left" size={18} />
+          </Pressable>
+          <Text numberOfLines={1} style={styles.headerTitle}>
+            Đang phát
+          </Text>
+          <View style={styles.headerSpacer} />
+        </View>
+
         <LinearGradient colors={coverColors} style={[styles.coverArt, isTablet && styles.coverArtTablet]}>
+          {isEpisodeSwitching ? (
+            <View style={styles.episodeSwitchingBadge}>
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            </View>
+          ) : null}
           <Text style={styles.coverTitle}>{baseSeries?.title ?? nowPlaying.title}</Text>
           <Text style={styles.coverEpisode}>{currentEpisode?.title ?? nowPlaying.episodeTitle}</Text>
         </LinearGradient>
@@ -319,7 +348,8 @@ export default function PlayerScreen() {
                     style={[styles.sheetRow, isCurrent && styles.sheetRowActive]}
                     onPress={() => {
                       setShowEpisodes(false);
-                      router.replace({ pathname: "/player", params: { seriesId: baseSeries!.id, episodeId: ep.id } });
+                      setIsEpisodeSwitching(true);
+                      setCurrentEpisodeId(ep.id);
                     }}
                   >
                     <View style={[styles.sheetPlayIcon, isCurrent && styles.sheetPlayIconActive]}>
@@ -376,18 +406,33 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     flex: 1
   },
-  handle: {
-    alignSelf: "center",
-    backgroundColor: theme.colors.line,
-    borderRadius: theme.radius.pill,
-    height: 4,
-    marginTop: 8,
-    width: 40,
-  },
   content: {
     flex: 1,
     gap: theme.spacing.xl,
     padding: theme.spacing.lg
+  },
+  headerRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  backButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.pill,
+    height: 40,
+    justifyContent: "center",
+    width: 40
+  },
+  headerTitle: {
+    color: theme.colors.text,
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center"
+  },
+  headerSpacer: {
+    width: 40
   },
   coverArt: {
     borderRadius: 32,
@@ -407,6 +452,16 @@ const styles = StyleSheet.create({
   coverEpisode: {
     color: "#FFF3D1",
     fontSize: 14
+  },
+  episodeSwitchingBadge: {
+    alignItems: "center",
+    alignSelf: "flex-end",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderRadius: theme.radius.pill,
+    height: 34,
+    justifyContent: "center",
+    marginBottom: "auto",
+    width: 34
   },
   metaSection: {
     gap: 6

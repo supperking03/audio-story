@@ -1,50 +1,54 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { loadStoryById, type StorySeries } from "../data/story-service";
 
 export function useStory(id?: string) {
   const [story, setStory] = useState<StorySeries | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async (silent = false) => {
+    if (!id) {
+      setStory(null);
+      setError(null);
+      setIsLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+
+    if (silent) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setError(null);
+
+    try {
+      const nextStory = await loadStoryById(id);
+      setStory(nextStory);
+    } catch (err) {
+      setStory(null);
+      setError(err instanceof Error ? err.message : "Không tải được series từ API.");
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [id]);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function run() {
-      if (!id) {
-        setStory(null);
-        setError(null);
-        setIsLoading(false);
+    refresh().catch(() => {
+      if (!isMounted) {
         return;
       }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const nextStory = await loadStoryById(id);
-
-        if (isMounted) {
-          setStory(nextStory);
-        }
-      } catch (err) {
-        if (isMounted) {
-          setStory(null);
-          setError(err instanceof Error ? err.message : "Không tải được series từ API.");
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    run();
+    });
 
     return () => {
       isMounted = false;
     };
-  }, [id]);
+  }, [refresh]);
 
-  return { story, isLoading, error };
+  return { story, isLoading, isRefreshing, error, refresh };
 }
