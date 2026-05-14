@@ -47,7 +47,7 @@ export default function SearchScreen() {
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Feather color={theme.colors.text} name="arrow-left" size={18} />
           </Pressable>
-          <Text style={styles.title}>Search</Text>
+          <Text style={styles.title}>Tìm kiếm</Text>
         </View>
 
         <View style={styles.searchBox}>

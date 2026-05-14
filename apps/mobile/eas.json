@@ -1,0 +1,26 @@
+{
+  "cli": {
+    "version": ">= 14.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "production": {
+      "ios": {
+        "buildConfiguration": "Release"
+      },
+      "distribution": "store",
+      "env": {}
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "kelvinngo@theluxenomad.com",
+        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID"
+      }
+    }
+  }
+}

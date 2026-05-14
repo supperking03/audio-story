@@ -2,8 +2,8 @@ import { Feather } from "@expo/vector-icons";
 import { useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Animated, FlatList, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { usePlayerMeta } from "../contexts/player-context";
@@ -11,6 +11,7 @@ import { theme } from "../constants/theme";
 import { getFallbackNowPlaying } from "../data/story-service";
 import { useSingletonPlayer } from "../hooks/use-singleton-player";
 import { useStory } from "../hooks/use-story";
+import { clearProgress, saveProgress } from "../lib/playback-store";
 
 const speedOptions = ["0.8x", "1.0x", "1.2x", "1.5x", "2.0x"];
 
@@ -29,7 +30,9 @@ function formatClock(seconds?: number) {
 
 export default function PlayerScreen() {
   const nowPlaying = getFallbackNowPlaying();
-  const params = useLocalSearchParams<{ episodeId?: string; seriesId?: string }>();
+  const params = useLocalSearchParams<{ episodeId?: string; seriesId?: string; resumeTime?: string }>();
+  const resumeTime = params.resumeTime ? Number(params.resumeTime) : null;
+  const hasResumedRef = useRef(false);
   const seriesId = params.seriesId ?? nowPlaying.seriesId;
   const { story: baseSeries, isLoading } = useStory(seriesId);
   const [selectedSpeed, setSelectedSpeed] = useState("1.2x");
@@ -68,8 +71,110 @@ export default function PlayerScreen() {
     player.setPlaybackRate(Number.parseFloat(selectedSpeed), "medium");
   }, [player, selectedSpeed]);
 
+  // Seek to resume position once audio duration is known
+  useEffect(() => {
+    if (!resumeTime || hasResumedRef.current || status.duration <= 0) return;
+    hasResumedRef.current = true;
+    player.seekTo(resumeTime);
+    player.play();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status.duration > 0]);
+
+  // Auto-save progress every 5 seconds while playing
+  const saveTickRef = useRef(-1);
+  useEffect(() => {
+    if (!baseSeries || !currentEpisode || !status.playing) return;
+    const tick = Math.floor(status.currentTime / 5);
+    if (tick === saveTickRef.current) return;
+    saveTickRef.current = tick;
+    if (status.currentTime < 10) return;
+    saveProgress(baseSeries.id, {
+      episodeId: currentEpisode.id,
+      episodeTitle: currentEpisode.title,
+      currentTime: status.currentTime,
+      savedAt: Date.now(),
+    });
+  }, [Math.floor(status.currentTime / 5), status.playing]);
+
+  // Clear progress when episode finishes
+  useEffect(() => {
+    if (status.didJustFinish && baseSeries) {
+      clearProgress(baseSeries.id);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status.didJustFinish]);
+
   const episodeIndex = baseSeries?.episodes.findIndex((episode) => episode.id === currentEpisode?.id) ?? -1;
-  const progress = status.duration > 0 ? status.currentTime / status.duration : nowPlaying.progress;
+  const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
+
+  const trackWidthRef = useRef(0);
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  const playerRef = useRef(player);
+  playerRef.current = player;
+  const hasAudioRef = useRef(hasAudio);
+  hasAudioRef.current = hasAudio;
+  const isDraggingRef = useRef(false);
+  const postSeekProgressRef = useRef<number | null>(null);
+
+  const animatedProgress = useRef(new Animated.Value(progress)).current;
+  const animatedFillWidth = useMemo(
+    () => animatedProgress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
+    [animatedProgress]
+  );
+  const animatedThumbLeft = useMemo(
+    () => animatedProgress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
+    [animatedProgress]
+  );
+  const [dragDisplayTime, setDragDisplayTime] = useState<number | null>(null);
+
+  // Runs synchronously after every committed render, before paint.
+  // Keeps bar in sync with playback; postSeekProgressRef holds target position
+  // after a seek until status.currentTime catches up (prevents snap-back).
+  useLayoutEffect(() => {
+    if (isDraggingRef.current) return;
+    if (postSeekProgressRef.current !== null) {
+      animatedProgress.setValue(postSeekProgressRef.current);
+      if (Math.abs(progress - postSeekProgressRef.current) < 0.02) {
+        postSeekProgressRef.current = null;
+      }
+      return;
+    }
+    animatedProgress.setValue(progress);
+  });
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => hasAudioRef.current && statusRef.current.duration > 0,
+      onMoveShouldSetPanResponder: () => hasAudioRef.current && statusRef.current.duration > 0,
+      onPanResponderGrant: (evt) => {
+        isDraggingRef.current = true;
+        if (statusRef.current.playing) playerRef.current.pause();
+        const ratio = Math.min(Math.max(evt.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+        animatedProgress.setValue(ratio);
+        setDragDisplayTime(ratio * statusRef.current.duration);
+      },
+      onPanResponderMove: (evt) => {
+        const ratio = Math.min(Math.max(evt.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+        animatedProgress.setValue(ratio);
+        setDragDisplayTime(ratio * statusRef.current.duration);
+      },
+      onPanResponderRelease: (evt) => {
+        const ratio = Math.min(Math.max(evt.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+        isDraggingRef.current = false;
+        postSeekProgressRef.current = ratio;
+        setDragDisplayTime(null);
+        playerRef.current.seekTo(ratio * statusRef.current.duration);
+        playerRef.current.play();
+      },
+      onPanResponderTerminate: () => {
+        isDraggingRef.current = false;
+        postSeekProgressRef.current = null;
+        setDragDisplayTime(null);
+        playerRef.current.play();
+      },
+    })
+  ).current;
 
   const changeEpisode = (direction: -1 | 1) => {
     if (!baseSeries || episodeIndex < 0) return;
@@ -130,11 +235,18 @@ export default function PlayerScreen() {
         </View>
 
         <View style={styles.timeline}>
-          <View style={styles.timelineTrack}>
-            <View style={[styles.timelineFill, { width: `${Math.min(Math.max(progress, 0), 1) * 100}%` }]} />
+          <View
+            style={styles.timelineWrapper}
+            onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
+            {...panResponder.panHandlers}
+          >
+            <View style={styles.timelineTrack}>
+              <Animated.View style={[styles.timelineFill, { width: animatedFillWidth }]} />
+            </View>
+            <Animated.View style={[styles.timelineThumb, { left: animatedThumbLeft }]} />
           </View>
           <View style={styles.timelineLabels}>
-            <Text style={styles.timelineText}>{formatClock(status.currentTime)}</Text>
+            <Text style={styles.timelineText}>{formatClock(dragDisplayTime ?? status.currentTime)}</Text>
             <Text style={styles.timelineText}>{formatClock(status.duration)}</Text>
           </View>
         </View>
@@ -167,13 +279,13 @@ export default function PlayerScreen() {
 
         <View style={styles.utilityRow}>
           <UtilityTile
-            label="Episodes"
+            label="Danh sách tập"
             value={`${baseSeries?.episodes.length ?? 0}`}
             onPress={baseSeries ? () => setShowEpisodes(true) : undefined}
           />
           <UtilityTile
-            label="Transcript"
-            value={currentEpisode?.transcriptText ? `${Math.ceil(currentEpisode.transcriptText.length / 5)} từ` : "—"}
+            label="Nội dung"
+            value={currentEpisode?.transcriptText ? "Xem" : "—"}
             onPress={currentEpisode?.transcriptText ? () => setShowTranscript(true) : undefined}
           />
         </View>
@@ -182,7 +294,7 @@ export default function PlayerScreen() {
           <Pressable style={styles.modalBackdrop} onPress={() => setShowTranscript(false)} />
           <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>{currentEpisode?.title ?? "Transcript"}</Text>
+            <Text style={styles.sheetTitle}>{currentEpisode?.title ?? "Nội dung"}</Text>
             <ScrollView contentContainerStyle={styles.transcriptContent}>
               <Text style={styles.transcriptText}>{currentEpisode?.transcriptText}</Text>
             </ScrollView>
@@ -306,6 +418,11 @@ const styles = StyleSheet.create({
   timeline: {
     gap: 10
   },
+  timelineWrapper: {
+    height: 22,
+    justifyContent: "center",
+    position: "relative"
+  },
   timelineTrack: {
     backgroundColor: theme.colors.surfaceElevated,
     borderRadius: theme.radius.pill,
@@ -316,6 +433,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.accent,
     borderRadius: theme.radius.pill,
     height: "100%"
+  },
+  timelineThumb: {
+    backgroundColor: theme.colors.accent,
+    borderRadius: theme.radius.pill,
+    height: 18,
+    marginLeft: -9,
+    position: "absolute",
+    top: 2,
+    width: 18
   },
   timelineLabels: {
     flexDirection: "row",

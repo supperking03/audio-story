@@ -127,7 +127,7 @@ function mapStory(story: ApiStory): StorySeries {
     author: story.author ?? "Chưa cập nhật",
     coverColor: gradients[hashIndex(story.id)],
     coverImageUrl: story.coverImageUrl,
-    mood: story.metadata?.mood ?? story.tags[0] ?? "Audio series",
+    mood: story.metadata?.mood ?? story.tags[0] ?? "Truyện audio",
     description: story.description ?? "",
     tags: story.tags,
     status: story.status === "COMPLETED" ? "Completed" : "Ongoing",

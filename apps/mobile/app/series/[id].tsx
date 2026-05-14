@@ -1,16 +1,33 @@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EpisodeRow } from "../../components/episode-row";
 import { theme } from "../../constants/theme";
 import { useStory } from "../../hooks/use-story";
+import { type SavedProgress, loadProgress } from "../../lib/playback-store";
+
+function formatClock(seconds: number) {
+  const total = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 export default function SeriesDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const { story: series, isLoading, error } = useStory(params.id);
+  const [savedProgress, setSavedProgress] = useState<SavedProgress | null>(null);
+
+  useEffect(() => {
+    if (!params.id) return;
+    loadProgress(params.id).then((p) => {
+      if (p && p.currentTime > 10) setSavedProgress(p);
+    });
+  }, [params.id]);
 
   if (isLoading) {
     return (
@@ -45,7 +62,7 @@ export default function SeriesDetailScreen() {
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Feather color={theme.colors.text} name="arrow-left" size={18} />
           </Pressable>
-          <Text style={styles.headerTitle}>Series</Text>
+          <Text style={styles.headerTitle}>Chi tiết</Text>
         </View>
 
         <LinearGradient colors={series.coverColor} style={styles.hero}>
@@ -59,6 +76,46 @@ export default function SeriesDetailScreen() {
         {series.description ? (
           <Text style={styles.description}>{series.description}</Text>
         ) : null}
+
+        <Modal
+          animationType="fade"
+          transparent
+          visible={!!savedProgress && series.episodes.some((ep) => ep.id === savedProgress?.episodeId)}
+          onRequestClose={() => setSavedProgress(null)}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setSavedProgress(null)} />
+          <View style={styles.resumeSheet}>
+            <View style={styles.resumeSheetHandle} />
+            <Text style={styles.resumeSheetTitle}>Nghe tiếp?</Text>
+            <Text style={styles.resumeSheetBody} numberOfLines={2}>
+              Lần trước bạn đang nghe{"\n"}
+              <Text style={styles.resumeSheetHighlight}>
+                {savedProgress?.episodeTitle} • {formatClock(savedProgress?.currentTime ?? 0)}
+              </Text>
+            </Text>
+            <View style={styles.resumeSheetActions}>
+              <Pressable
+                style={styles.resumeSheetDismiss}
+                onPress={() => setSavedProgress(null)}
+              >
+                <Text style={styles.resumeSheetDismissText}>Bỏ qua</Text>
+              </Pressable>
+              <Pressable
+                style={styles.resumeSheetConfirm}
+                onPress={() => {
+                  setSavedProgress(null);
+                  router.push({
+                    pathname: "/player",
+                    params: { seriesId: series.id, episodeId: savedProgress!.episodeId, resumeTime: String(Math.floor(savedProgress!.currentTime)) }
+                  });
+                }}
+              >
+                <Feather color="#11131C" name="play" size={16} />
+                <Text style={styles.resumeSheetConfirmText}>Nghe tiếp</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
 
         <Pressable
           onPress={() =>
@@ -145,6 +202,76 @@ const styles = StyleSheet.create({
   heroMeta: {
     color: "rgba(255,255,255,0.82)",
     fontSize: 14
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.6)"
+  },
+  resumeSheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    bottom: 0,
+    gap: theme.spacing.md,
+    left: 0,
+    padding: theme.spacing.lg,
+    paddingBottom: 40,
+    position: "absolute",
+    right: 0
+  },
+  resumeSheetHandle: {
+    alignSelf: "center",
+    backgroundColor: theme.colors.line,
+    borderRadius: theme.radius.pill,
+    height: 4,
+    marginBottom: 4,
+    width: 40
+  },
+  resumeSheetTitle: {
+    color: theme.colors.text,
+    fontSize: 20,
+    fontWeight: "800"
+  },
+  resumeSheetBody: {
+    color: theme.colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22
+  },
+  resumeSheetHighlight: {
+    color: theme.colors.text,
+    fontWeight: "700"
+  },
+  resumeSheetActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4
+  },
+  resumeSheetDismiss: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surfaceElevated,
+    borderRadius: theme.radius.pill,
+    flex: 1,
+    paddingVertical: 14
+  },
+  resumeSheetDismissText: {
+    color: theme.colors.text,
+    fontSize: 15,
+    fontWeight: "700"
+  },
+  resumeSheetConfirm: {
+    alignItems: "center",
+    backgroundColor: theme.colors.warning,
+    borderRadius: theme.radius.pill,
+    flex: 2,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    paddingVertical: 14
+  },
+  resumeSheetConfirmText: {
+    color: "#11131C",
+    fontSize: 15,
+    fontWeight: "800"
   },
   primaryAction: {
     alignItems: "center",

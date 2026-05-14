@@ -21,11 +21,11 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.heroHeader}>
           <Text style={styles.kicker}>Audio Story</Text>
-          <Text style={styles.title}>Discover</Text>
+          <Text style={styles.title}>Khám phá</Text>
         </View>
 
         <View style={styles.searchSection}>
-          <SectionHeader title="Browse" />
+          <SectionHeader title="Tìm kiếm" />
           <Pressable onPress={() => router.push("/search")} style={styles.searchBox}>
             <Feather color={theme.colors.textMuted} name="search" size={18} />
             <Text style={styles.placeholder}>Tên truyện, tác giả, mood...</Text>
@@ -44,7 +44,7 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.section}>
-          <SectionHeader title="All stories" />
+          <SectionHeader title="Tất cả truyện" />
           {isLoading ? <Text style={styles.helperText}>Đang tải danh sách truyện...</Text> : null}
           {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
           {!isLoading && !error && stories.length === 0 ? (
