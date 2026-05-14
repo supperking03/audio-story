@@ -1,35 +1,19 @@
 import { Feather } from "@expo/vector-icons";
-import { setAudioModeAsync, useAudioPlayerStatus } from "expo-audio";
+import { useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { theme } from "../../constants/theme";
-import { getFallbackNowPlaying } from "../../data/story-service";
-import { useSingletonPlayer } from "../../hooks/use-singleton-player";
-import { useStory } from "../../hooks/use-story";
+import { usePlayerMeta } from "../contexts/player-context";
+import { theme } from "../constants/theme";
+import { getFallbackNowPlaying } from "../data/story-service";
+import { useSingletonPlayer } from "../hooks/use-singleton-player";
+import { useStory } from "../hooks/use-story";
 
 const speedOptions = ["0.8x", "1.0x", "1.2x", "1.5x", "2.0x"];
 
-function disableLockScreenControls(player: {
-  setActiveForLockScreen?: (active: boolean) => void;
-  clearLockScreenControls?: () => void;
-}) {
-  try {
-    if (typeof player.clearLockScreenControls === "function") {
-      player.clearLockScreenControls();
-      return;
-    }
-
-    if (typeof player.setActiveForLockScreen === "function") {
-      player.setActiveForLockScreen(false);
-    }
-  } catch {
-    // Native player may already be released when component unmounts.
-  }
-}
 
 function formatClock(seconds?: number) {
   if (!seconds || Number.isNaN(seconds)) {
@@ -50,6 +34,9 @@ export default function PlayerScreen() {
   const { story: baseSeries, isLoading } = useStory(seriesId);
   const [selectedSpeed, setSelectedSpeed] = useState("1.2x");
   const [showEpisodes, setShowEpisodes] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const { setMeta } = usePlayerMeta();
+
   const currentEpisode = useMemo(() => {
     if (params.episodeId) {
       return baseSeries?.episodes.find((episode) => episode.id === params.episodeId) ?? null;
@@ -57,51 +44,25 @@ export default function PlayerScreen() {
 
     return baseSeries?.episodes[0] ?? null;
   }, [baseSeries, params.episodeId]);
+
   const player = useSingletonPlayer(currentEpisode?.audioUrl ?? null, currentEpisode?.id ?? null);
   const status = useAudioPlayerStatus(player);
   const hasAudio = Boolean(currentEpisode?.audioUrl);
 
+  // Persist current episode meta for the mini player and lock screen (via AudioSessionManager)
   useEffect(() => {
-    setAudioModeAsync({
-      playsInSilentMode: true,
-      shouldPlayInBackground: true,
-      interruptionMode: "doNotMix"
-    }).catch(() => {
-      // Keep the player usable even if audio mode config fails on a simulator/device.
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!hasAudio) {
-      disableLockScreenControls(player);
-      return;
+    if (currentEpisode && baseSeries) {
+      setMeta({
+        episodeId: currentEpisode.id,
+        episodeTitle: currentEpisode.title,
+        seriesId: baseSeries.id,
+        seriesTitle: baseSeries.title,
+        coverColor: baseSeries.coverColor,
+        coverImageUrl: baseSeries.coverImageUrl,
+      });
     }
-
-    player.setActiveForLockScreen(
-      true,
-      {
-        title: currentEpisode?.title ?? nowPlaying.episodeTitle,
-        artist: baseSeries?.title ?? nowPlaying.title,
-        artworkUrl: baseSeries?.coverImageUrl ?? undefined
-      },
-      {
-        showSeekBackward: true,
-        showSeekForward: true
-      }
-    );
-
-    return () => {
-      disableLockScreenControls(player);
-    };
-  }, [
-    baseSeries?.coverImageUrl,
-    baseSeries?.title,
-    currentEpisode?.title,
-    hasAudio,
-    nowPlaying.episodeTitle,
-    nowPlaying.title,
-    player
-  ]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentEpisode?.id, baseSeries?.id]);
 
   useEffect(() => {
     player.setPlaybackRate(Number.parseFloat(selectedSpeed), "medium");
@@ -111,15 +72,9 @@ export default function PlayerScreen() {
   const progress = status.duration > 0 ? status.currentTime / status.duration : nowPlaying.progress;
 
   const changeEpisode = (direction: -1 | 1) => {
-    if (!baseSeries || episodeIndex < 0) {
-      return;
-    }
-
+    if (!baseSeries || episodeIndex < 0) return;
     const nextEpisode = baseSeries.episodes[episodeIndex + direction];
-    if (!nextEpisode) {
-      return;
-    }
-
+    if (!nextEpisode) return;
     router.replace({
       pathname: "/player",
       params: { seriesId: baseSeries.id, episodeId: nextEpisode.id }
@@ -127,30 +82,24 @@ export default function PlayerScreen() {
   };
 
   const togglePlayback = async () => {
-    if (!hasAudio) {
-      return;
-    }
-
+    if (!hasAudio) return;
     if (status.playing) {
       player.pause();
       return;
     }
-
     if (status.didJustFinish || (status.duration > 0 && status.currentTime >= status.duration)) {
       player.seekTo(0);
     }
-
     player.play();
   };
 
   const seekBy = (offsetSeconds: number) => {
-    if (!hasAudio || status.duration <= 0) {
-      return;
-    }
-
+    if (!hasAudio || status.duration <= 0) return;
     const nextTime = Math.min(Math.max(0, status.currentTime + offsetSeconds), status.duration);
     player.seekTo(nextTime);
   };
+
+  const coverColors: [string, string] = baseSeries?.coverColor ?? ["#5C1A1B", "#E09F3E"];
 
   if (isLoading) {
     return (
@@ -163,9 +112,12 @@ export default function PlayerScreen() {
   }
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.safeArea}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+      {/* Drag handle for modal-style dismiss hint */}
+      <View style={styles.handle} />
+
       <View style={styles.content}>
-        <LinearGradient colors={["#5C1A1B", "#A63D40", "#E09F3E"]} style={styles.coverArt}>
+        <LinearGradient colors={coverColors} style={styles.coverArt}>
           <Text style={styles.coverTitle}>{baseSeries?.title ?? nowPlaying.title}</Text>
           <Text style={styles.coverEpisode}>{currentEpisode?.title ?? nowPlaying.episodeTitle}</Text>
         </LinearGradient>
@@ -214,13 +166,28 @@ export default function PlayerScreen() {
         </View>
 
         <View style={styles.utilityRow}>
-          <UtilityTile label="Audio" value={hasAudio ? "Ready" : "Pending"} />
           <UtilityTile
             label="Episodes"
             value={`${baseSeries?.episodes.length ?? 0}`}
             onPress={baseSeries ? () => setShowEpisodes(true) : undefined}
           />
+          <UtilityTile
+            label="Transcript"
+            value={currentEpisode?.transcriptText ? `${Math.ceil(currentEpisode.transcriptText.length / 5)} từ` : "—"}
+            onPress={currentEpisode?.transcriptText ? () => setShowTranscript(true) : undefined}
+          />
         </View>
+
+        <Modal animationType="slide" transparent visible={showTranscript} onRequestClose={() => setShowTranscript(false)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowTranscript(false)} />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>{currentEpisode?.title ?? "Transcript"}</Text>
+            <ScrollView contentContainerStyle={styles.transcriptContent}>
+              <Text style={styles.transcriptText}>{currentEpisode?.transcriptText}</Text>
+            </ScrollView>
+          </View>
+        </Modal>
 
         <Modal animationType="slide" transparent visible={showEpisodes} onRequestClose={() => setShowEpisodes(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setShowEpisodes(false)} />
@@ -295,6 +262,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     flex: 1
   },
+  handle: {
+    alignSelf: "center",
+    backgroundColor: theme.colors.line,
+    borderRadius: theme.radius.pill,
+    height: 4,
+    marginTop: 8,
+    width: 40,
+  },
   content: {
     flex: 1,
     gap: theme.spacing.xl,
@@ -304,17 +279,17 @@ const styles = StyleSheet.create({
     borderRadius: 32,
     gap: 6,
     justifyContent: "flex-end",
-    minHeight: 320,
+    minHeight: 280,
     padding: 24
   },
   coverTitle: {
     color: "#FFFFFF",
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: "800"
   },
   coverEpisode: {
     color: "#FFF3D1",
-    fontSize: 15
+    fontSize: 14
   },
   metaSection: {
     gap: 6
@@ -499,6 +474,15 @@ const styles = StyleSheet.create({
   },
   sheetEpMetaActive: {
     color: "rgba(17, 19, 28, 0.6)"
+  },
+  transcriptContent: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: 32
+  },
+  transcriptText: {
+    color: theme.colors.text,
+    fontSize: 15,
+    lineHeight: 26
   },
   loadingText: {
     color: theme.colors.textMuted,

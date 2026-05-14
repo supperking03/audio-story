@@ -8,6 +8,7 @@ export type Episode = {
   publishedAt: string;
   summary: string;
   audioUrl?: string | null;
+  transcriptText?: string | null;
 };
 
 export type StorySeries = {
@@ -32,6 +33,7 @@ type ApiEpisode = {
   audioUrl: string | null;
   durationSec: number | null;
   publishedAt: string | null;
+  transcriptText: string | null;
 };
 
 type ApiStory = {
@@ -104,7 +106,8 @@ function mapEpisode(episode: ApiEpisode): Episode {
     durationLabel: formatDurationLabel(episode.durationSec),
     publishedAt: formatPublishedAt(episode.publishedAt),
     summary: episode.summary ?? "",
-    audioUrl: episode.audioUrl
+    audioUrl: episode.audioUrl,
+    transcriptText: episode.transcriptText
   };
 }
 

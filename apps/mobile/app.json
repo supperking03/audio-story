@@ -18,9 +18,7 @@
         }
       ]
     ],
-    "extra": {
-      "apiBaseUrl": "http://192.168.1.151:3000"
-    },
+    "extra": {},
     "ios": {
       "bundleIdentifier": "com.supperking03.audio-story",
       "infoPlist": {

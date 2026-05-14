@@ -3,11 +3,11 @@ import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { SectionHeader } from "../../components/section-header";
-import { StoryCard } from "../../components/story-card";
-import { browseTerms } from "../../constants/mock-data";
-import { theme } from "../../constants/theme";
-import { useStories } from "../../hooks/use-stories";
+import { SectionHeader } from "../components/section-header";
+import { StoryCard } from "../components/story-card";
+import { browseTerms } from "../constants/mock-data";
+import { theme } from "../constants/theme";
+import { useStories } from "../hooks/use-stories";
 
 export default function HomeScreen() {
   const { stories, isLoading, error } = useStories();

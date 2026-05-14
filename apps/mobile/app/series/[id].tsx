@@ -56,6 +56,10 @@ export default function SeriesDetailScreen() {
           </Text>
         </LinearGradient>
 
+        {series.description ? (
+          <Text style={styles.description}>{series.description}</Text>
+        ) : null}
+
         <Pressable
           onPress={() =>
             router.push({
@@ -156,6 +160,11 @@ const styles = StyleSheet.create({
     color: "#11131C",
     fontSize: 15,
     fontWeight: "800"
+  },
+  description: {
+    color: theme.colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22
   },
   section: {
     gap: 12

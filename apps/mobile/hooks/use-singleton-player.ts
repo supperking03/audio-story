@@ -4,7 +4,7 @@ import { useEffect } from "react";
 let _player: AudioPlayer | null = null;
 let _currentEpisodeId: string | null = null;
 
-function getPlayer(): AudioPlayer {
+export function getPlayer(): AudioPlayer {
   if (!_player) {
     _player = createAudioPlayer(null, 500);
   }
