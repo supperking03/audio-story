@@ -17,7 +17,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		00565EB71E9837282A57929F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = audiostoryworkspace/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		00565EB71E9837282A57929F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = audiostoryworkspace/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		0C491FABD7249991B856922B /* Pods-audiostoryworkspace.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-audiostoryworkspace.debug.xcconfig"; path = "Target Support Files/Pods-audiostoryworkspace/Pods-audiostoryworkspace.debug.xcconfig"; sourceTree = "<group>"; };
 		13B07F961A680F5B00A75B9A /* audiostoryworkspace.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = audiostoryworkspace.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		13B07FB51A68108700A75B9A /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Images.xcassets; path = audiostoryworkspace/Images.xcassets; sourceTree = "<group>"; };
@@ -120,7 +120,6 @@
 				0C491FABD7249991B856922B /* Pods-audiostoryworkspace.debug.xcconfig */,
 				87DCAA454556FB5CF9B8D17F /* Pods-audiostoryworkspace.release.xcconfig */,
 			);
-			name = Pods;
 			path = Pods;
 			sourceTree = "<group>";
 		};
@@ -166,7 +165,6 @@
 				LastUpgradeCheck = 1130;
 				TargetAttributes = {
 					13B07F861A680F5B00A75B9A = {
-						DevelopmentTeam = TDE9A9EHZ7;
 						LastSwiftMigration = 1250;
 						ProvisioningStyle = Automatic;
 					};
