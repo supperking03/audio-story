@@ -2,7 +2,7 @@ import { Feather } from "@expo/vector-icons";
 import { useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, usePathname } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { usePlayerMeta } from "../contexts/player-context";
@@ -15,6 +15,8 @@ export function MiniPlayer() {
   const player = getPlayer();
   const status = useAudioPlayerStatus(player);
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isTablet = width >= 768;
 
   if (pathname === "/player" || !meta) return null;
 
@@ -29,7 +31,7 @@ export function MiniPlayer() {
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width: `${Math.min(Math.max(progress, 0), 1) * 100}%` }]} />
       </View>
-      <View style={styles.row}>
+      <View style={[styles.row, isTablet && { maxWidth: 800, alignSelf: "center", width: "100%" }]}>
         <Pressable onPress={openPlayer} style={styles.coverWrap}>
           <LinearGradient colors={meta.coverColor} style={styles.cover} />
         </Pressable>

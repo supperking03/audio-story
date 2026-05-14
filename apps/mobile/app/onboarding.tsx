@@ -2,7 +2,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Image,
   NativeScrollEvent,
@@ -11,12 +10,12 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { theme } from "../constants/theme";
 
-const { width: W } = Dimensions.get("window");
 const ONBOARDING_KEY = "bubu_onboarding_done";
 
 const slides = [
@@ -57,6 +56,8 @@ const slides = [
 ];
 
 export default function OnboardingScreen() {
+  const { width: W } = useWindowDimensions();
+  const isTablet = W >= 768;
   const [activeIndex, setActiveIndex] = useState(0);
   const listRef = useRef<FlatList>(null);
 
@@ -89,7 +90,9 @@ export default function OnboardingScreen() {
         showsHorizontalScrollIndicator={false}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        renderItem={({ item }) => <Slide slide={item} />}
+        extraData={W}
+        getItemLayout={(_, index) => ({ length: W, offset: W * index, index })}
+        renderItem={({ item }) => <Slide slide={item} width={W} isTablet={isTablet} />}
       />
 
       {/* Dots */}
@@ -122,9 +125,10 @@ export default function OnboardingScreen() {
   );
 }
 
-function Slide({ slide }: { slide: (typeof slides)[number] }) {
+function Slide({ slide, width, isTablet }: { slide: (typeof slides)[number]; width: number; isTablet: boolean }) {
+  const slidePadH = isTablet ? Math.max(60, (width - 560) / 2) : 36;
   return (
-    <View style={[styles.slide, { width: W }]}>
+    <View style={[styles.slide, { width, paddingHorizontal: slidePadH }]}>
       {slide.id === "welcome" && (
         <Image
           source={require("../assets/icon.png")}

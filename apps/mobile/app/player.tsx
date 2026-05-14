@@ -9,6 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { usePlayerMeta } from "../contexts/player-context";
 import { theme } from "../constants/theme";
 import { getFallbackNowPlaying } from "../data/story-service";
+import { useResponsive } from "../hooks/use-responsive";
 import { useSingletonPlayer } from "../hooks/use-singleton-player";
 import { useStory } from "../hooks/use-story";
 import { clearProgress, saveProgress } from "../lib/playback-store";
@@ -30,6 +31,7 @@ function formatClock(seconds?: number) {
 
 export default function PlayerScreen() {
   const nowPlaying = getFallbackNowPlaying();
+  const { isTablet, hPad } = useResponsive();
   const params = useLocalSearchParams<{ episodeId?: string; seriesId?: string; resumeTime?: string }>();
   const resumeTime = params.resumeTime ? Number(params.resumeTime) : null;
   const hasResumedRef = useRef(false);
@@ -221,8 +223,8 @@ export default function PlayerScreen() {
       {/* Drag handle for modal-style dismiss hint */}
       <View style={styles.handle} />
 
-      <View style={styles.content}>
-        <LinearGradient colors={coverColors} style={styles.coverArt}>
+      <View style={[styles.content, isTablet && { paddingHorizontal: hPad }]}>
+        <LinearGradient colors={coverColors} style={[styles.coverArt, isTablet && styles.coverArtTablet]}>
           <Text style={styles.coverTitle}>{baseSeries?.title ?? nowPlaying.title}</Text>
           <Text style={styles.coverEpisode}>{currentEpisode?.title ?? nowPlaying.episodeTitle}</Text>
         </LinearGradient>
@@ -257,7 +259,7 @@ export default function PlayerScreen() {
           <Pressable
             disabled={!hasAudio}
             onPress={togglePlayback}
-            style={[styles.primaryButton, !hasAudio && styles.disabledButton]}
+            style={[styles.primaryButton, isTablet && styles.primaryButtonTablet, !hasAudio && styles.disabledButton]}
           >
             <Feather color="#11131C" name={status.playing ? "pause" : "play"} size={26} />
           </Pressable>
@@ -394,6 +396,9 @@ const styles = StyleSheet.create({
     minHeight: 280,
     padding: 24
   },
+  coverArtTablet: {
+    minHeight: 400
+  },
   coverTitle: {
     color: "#FFFFFF",
     fontSize: 26,
@@ -473,6 +478,10 @@ const styles = StyleSheet.create({
     height: 72,
     justifyContent: "center",
     width: 72
+  },
+  primaryButtonTablet: {
+    height: 90,
+    width: 90
   },
   disabledButton: {
     opacity: 0.45

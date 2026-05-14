@@ -10,12 +10,14 @@ import { StoryCard } from "../components/story-card";
 import { browseTerms } from "../constants/mock-data";
 import { theme } from "../constants/theme";
 import { searchSeries } from "../data/story-service";
+import { useResponsive } from "../hooks/use-responsive";
 import { useStories } from "../hooks/use-stories";
 
 export default function SearchScreen() {
   const params = useLocalSearchParams<{ query?: string }>();
   const [query, setQuery] = useState(params.query ?? "");
   const { stories, isLoading, error } = useStories();
+  const { isTablet, hPad } = useResponsive();
 
   const results = useMemo(() => searchSeries(stories, query), [query, stories]);
   const episodeResults = useMemo(() => {
@@ -42,7 +44,7 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, isTablet && { paddingHorizontal: hPad }]}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Feather color={theme.colors.text} name="arrow-left" size={18} />
@@ -74,9 +76,11 @@ export default function SearchScreen() {
           <SectionHeader title={query ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
           {isLoading ? <Text style={styles.helperText}>Đang tải truyện...</Text> : null}
           {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
-          <View style={styles.resultList}>
+          <View style={[styles.resultList, isTablet && styles.resultListTablet]}>
             {results.map((series) => (
-              <StoryCard key={series.id} compact onPress={() => openSeries(series.id)} series={series} />
+              <View key={series.id} style={isTablet ? styles.resultGridItem : null}>
+                <StoryCard compact onPress={() => openSeries(series.id)} series={series} />
+              </View>
             ))}
           </View>
         </View>
@@ -179,6 +183,13 @@ const styles = StyleSheet.create({
   },
   resultList: {
     gap: 14
+  },
+  resultListTablet: {
+    flexDirection: "row",
+    flexWrap: "wrap"
+  },
+  resultGridItem: {
+    width: "49%"
   },
   episodeList: {
     gap: 12

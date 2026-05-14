@@ -7,10 +7,12 @@ import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
 import { browseTerms } from "../constants/mock-data";
 import { theme } from "../constants/theme";
+import { useResponsive } from "../hooks/use-responsive";
 import { useStories } from "../hooks/use-stories";
 
 export default function HomeScreen() {
   const { stories, isLoading, error } = useStories();
+  const { isTablet, hPad } = useResponsive();
 
   const openSeries = (seriesId: string) => {
     router.push({ pathname: "/series/[id]", params: { id: seriesId } });
@@ -18,7 +20,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: hPad }]}>
         <View style={styles.heroHeader}>
           <Text style={styles.appName}>BuBu</Text>
           <Text style={styles.appSub}>Nghe truyện ngôn tình & trinh thám</Text>
@@ -49,9 +51,11 @@ export default function HomeScreen() {
           {!isLoading && !error && stories.length === 0 ? (
             <Text style={styles.helperText}>API đang chạy nhưng chưa có truyện nào.</Text>
           ) : null}
-          <View style={styles.storyList}>
+          <View style={[styles.storyList, isTablet && styles.storyListTablet]}>
             {stories.map((series) => (
-              <StoryCard key={series.id} compact onPress={() => openSeries(series.id)} series={series} />
+              <View key={series.id} style={isTablet ? styles.storyGridItem : null}>
+                <StoryCard compact onPress={() => openSeries(series.id)} series={series} />
+              </View>
             ))}
           </View>
         </View>
@@ -69,6 +73,13 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xl,
     padding: theme.spacing.lg,
     paddingBottom: 140
+  },
+  storyListTablet: {
+    flexDirection: "row",
+    flexWrap: "wrap"
+  },
+  storyGridItem: {
+    width: "49%"
   },
   heroHeader: {
     gap: 4,

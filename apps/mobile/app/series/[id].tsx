@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EpisodeRow } from "../../components/episode-row";
 import { theme } from "../../constants/theme";
+import { useResponsive } from "../../hooks/use-responsive";
 import { useStory } from "../../hooks/use-story";
 import { type SavedProgress, loadProgress } from "../../lib/playback-store";
 
@@ -20,6 +21,7 @@ function formatClock(seconds: number) {
 export default function SeriesDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const { story: series, isLoading, error } = useStory(params.id);
+  const { isTablet, hPad } = useResponsive();
   const [savedProgress, setSavedProgress] = useState<SavedProgress | null>(null);
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export default function SeriesDetailScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, isTablet && { paddingHorizontal: hPad }]}>
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Feather color={theme.colors.text} name="arrow-left" size={18} />
@@ -65,7 +67,7 @@ export default function SeriesDetailScreen() {
           <Text style={styles.headerTitle}>Chi tiết</Text>
         </View>
 
-        <LinearGradient colors={series.coverColor} style={styles.hero}>
+        <LinearGradient colors={series.coverColor} style={[styles.hero, isTablet && styles.heroTablet]}>
           <Text style={styles.heroMood}>{series.mood}</Text>
           <Text style={styles.heroTitle}>{series.title}</Text>
           <Text style={styles.heroMeta}>
@@ -187,6 +189,9 @@ const styles = StyleSheet.create({
     minHeight: 240,
     justifyContent: "flex-end",
     padding: theme.spacing.lg
+  },
+  heroTablet: {
+    minHeight: 360
   },
   heroMood: {
     color: "rgba(255,255,255,0.82)",
