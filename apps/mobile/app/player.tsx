@@ -262,21 +262,33 @@ export default function PlayerScreen() {
   }, [baseSeries, currentEpisode, playbackTick, status.currentTime, status.playing]);
 
   const didHandleFinishRef = useRef(false);
+  const wasPlayingRef = useRef(false);
   useEffect(() => {
     if (!currentEpisode || !baseSeries) {
       return;
     }
 
-    if (!status.didJustFinish) {
+    const finishedByEvent = status.didJustFinish;
+    const finishedByPosition =
+      wasPlayingRef.current &&
+      !status.playing &&
+      status.duration > 0 &&
+      status.currentTime >= Math.max(status.duration - 1.5, status.duration * 0.98);
+    const hasFinished = finishedByEvent || finishedByPosition;
+
+    if (!hasFinished) {
       didHandleFinishRef.current = false;
+      wasPlayingRef.current = status.playing;
       return;
     }
 
     if (didHandleFinishRef.current) {
+      wasPlayingRef.current = status.playing;
       return;
     }
 
     didHandleFinishRef.current = true;
+    wasPlayingRef.current = status.playing;
     if (sleepTimerKey === "episode") {
       clearSleepTimer();
       player.pause();
@@ -294,10 +306,10 @@ export default function PlayerScreen() {
       return;
     }
 
-    if (status.didJustFinish && baseSeries) {
+    if (hasFinished && baseSeries) {
       clearProgress(baseSeries.id);
     }
-  }, [baseSeries, currentEpisode, orderedEpisodes, player, sleepTimerKey, status.didJustFinish]);
+  }, [baseSeries, currentEpisode, orderedEpisodes, player, sleepTimerKey, status.currentTime, status.didJustFinish, status.duration, status.playing]);
 
   const episodeIndex = orderedEpisodes.findIndex((episode) => episode.id === currentEpisode?.id);
   const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
