@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LoadingIndicator } from "../components/loading-indicator";
 import { usePlayerMeta } from "../contexts/player-context";
 import { theme } from "../constants/theme";
-import { getFallbackNowPlaying } from "../data/story-service";
+import { getFallbackNowPlaying, loadEpisodeById, type Episode } from "../data/story-service";
 import { useResponsive } from "../hooks/use-responsive";
 import { useSingletonPlayer } from "../hooks/use-singleton-player";
 import { useStory } from "../hooks/use-story";
@@ -46,6 +46,7 @@ export default function PlayerScreen() {
   const { isTablet, hPad } = useResponsive();
   const params = useLocalSearchParams<{ episodeId?: string; seriesId?: string; resumeTime?: string }>();
   const resumeTime = params.resumeTime ? Number(params.resumeTime) : null;
+  const resumeEpisodeId = resumeTime !== null ? (params.episodeId ?? null) : null;
   const hasResumedRef = useRef(false);
   const seriesId = params.seriesId ?? nowPlaying.seriesId;
   const { story: baseSeries, isLoading } = useStory(seriesId);
@@ -56,11 +57,17 @@ export default function PlayerScreen() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(params.episodeId ?? null);
   const [isEpisodeSwitching, setIsEpisodeSwitching] = useState(false);
+  const [episodeAssets, setEpisodeAssets] = useState<Record<string, Episode>>({});
+  const [episodeAssetError, setEpisodeAssetError] = useState<string | null>(null);
   const { setMeta, remoteNextRef, remotePrevRef } = usePlayerMeta();
 
   useEffect(() => {
     setCurrentEpisodeId(params.episodeId ?? null);
   }, [params.episodeId]);
+
+  useEffect(() => {
+    hasResumedRef.current = false;
+  }, [resumeEpisodeId, resumeTime]);
 
   const orderedEpisodes = useMemo(() => {
     return [...(baseSeries?.episodes ?? [])].sort((a, b) => {
@@ -73,29 +80,65 @@ export default function PlayerScreen() {
     });
   }, [baseSeries?.episodes]);
 
+  useEffect(() => {
+    if (currentEpisodeId || orderedEpisodes.length === 0) {
+      return;
+    }
+    setCurrentEpisodeId(orderedEpisodes[orderedEpisodes.length - 1]?.id ?? null);
+  }, [currentEpisodeId, orderedEpisodes]);
+
   const currentEpisode = useMemo(() => {
     if (currentEpisodeId) {
-      return orderedEpisodes.find((episode) => episode.id === currentEpisodeId) ?? null;
+      const baseEpisode = orderedEpisodes.find((episode) => episode.id === currentEpisodeId) ?? null;
+      if (!baseEpisode) {
+        return null;
+      }
+      return {
+        ...baseEpisode,
+        ...(episodeAssets[currentEpisodeId] ?? {}),
+      };
     }
 
     return orderedEpisodes[orderedEpisodes.length - 1] ?? null;
-  }, [currentEpisodeId, orderedEpisodes]);
+  }, [currentEpisodeId, episodeAssets, orderedEpisodes]);
 
   const player = useSingletonPlayer(currentEpisode?.audioUrl ?? null, currentEpisode?.id ?? null);
   const status = useAudioPlayerStatus(player);
   const hasAudio = Boolean(currentEpisode?.audioUrl);
 
   useEffect(() => {
-    if (!isEpisodeSwitching || !currentEpisode?.id) {
+    if (!currentEpisodeId || episodeAssets[currentEpisodeId]?.audioUrl) {
       return;
     }
 
-    const timer = setTimeout(() => {
-      setIsEpisodeSwitching(false);
-    }, 350);
+    let isCancelled = false;
+    setEpisodeAssetError(null);
+    setIsEpisodeSwitching(true);
 
-    return () => clearTimeout(timer);
-  }, [currentEpisode?.id, isEpisodeSwitching]);
+    loadEpisodeById(currentEpisodeId)
+      .then((episode) => {
+        if (isCancelled) {
+          return;
+        }
+        setEpisodeAssets((prev) => ({ ...prev, [currentEpisodeId]: episode }));
+      })
+      .catch((err) => {
+        if (isCancelled) {
+          return;
+        }
+        setEpisodeAssetError(err instanceof Error ? err.message : "Không tải được audio tập này.");
+      })
+      .finally(() => {
+        if (isCancelled) {
+          return;
+        }
+        setIsEpisodeSwitching(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentEpisodeId, episodeAssets]);
 
   // Persist current episode meta for the mini player and lock screen (via AudioSessionManager)
   useEffect(() => {
@@ -122,11 +165,12 @@ export default function PlayerScreen() {
   // Seek to resume position once audio duration is known
   useEffect(() => {
     if (!resumeTime || hasResumedRef.current || status.duration <= 0) return;
+    if (!currentEpisode?.id || currentEpisode.id !== resumeEpisodeId) return;
     hasResumedRef.current = true;
     player.seekTo(resumeTime);
     player.play();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status.duration > 0]);
+  }, [currentEpisode?.id, resumeEpisodeId, resumeTime, status.duration > 0]);
 
   // Auto-save progress every 5 seconds while playing
   const saveTickRef = useRef(-1);
@@ -165,7 +209,7 @@ export default function PlayerScreen() {
 
     if (nextEpisode) {
       saveTickRef.current = -1;
-      hasResumedRef.current = false;
+      hasResumedRef.current = true;
       setIsEpisodeSwitching(true);
       setCurrentEpisodeId(nextEpisode.id);
       return;
@@ -294,7 +338,7 @@ export default function PlayerScreen() {
     const nextEpisode = orderedEpisodes[episodeIndex + direction];
     if (!nextEpisode) return;
     saveTickRef.current = -1;
-    hasResumedRef.current = false;
+    hasResumedRef.current = true;
     setIsEpisodeSwitching(true);
     setShowTranscript(false);
     setCurrentEpisodeId(nextEpisode.id);
@@ -366,6 +410,7 @@ export default function PlayerScreen() {
             {currentEpisode?.durationLabel ?? "Chưa rõ"} • {selectedSpeed.toFixed(1)}x
           </Text>
           {!hasAudio ? <Text style={styles.helperText}>Tập này chưa có file audio thật.</Text> : null}
+          {episodeAssetError ? <Text style={styles.helperText}>Lỗi tải audio: {episodeAssetError}</Text> : null}
         </View>
 
         <View style={styles.timeline}>
@@ -466,7 +511,7 @@ export default function PlayerScreen() {
                     onPress={() => {
                       setShowEpisodes(false);
                       saveTickRef.current = -1;
-                      hasResumedRef.current = false;
+                      hasResumedRef.current = true;
                       setIsEpisodeSwitching(true);
                       setCurrentEpisodeId(ep.id);
                     }}

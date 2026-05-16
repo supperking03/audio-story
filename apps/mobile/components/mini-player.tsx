@@ -11,7 +11,7 @@ import { theme } from "../constants/theme";
 
 export function MiniPlayer() {
   const pathname = usePathname();
-  const { meta } = usePlayerMeta();
+  const { meta, setMeta, remoteNextRef, remotePrevRef } = usePlayerMeta();
   const player = getPlayer();
   const status = useAudioPlayerStatus(player);
   const insets = useSafeAreaInsets();
@@ -24,6 +24,14 @@ export function MiniPlayer() {
 
   const openPlayer = () => {
     router.push({ pathname: "/player", params: { seriesId: meta.seriesId, episodeId: meta.episodeId } });
+  };
+
+  const closeMiniPlayer = () => {
+    player.pause();
+    player.seekTo(0);
+    remoteNextRef.current = null;
+    remotePrevRef.current = null;
+    setMeta(null);
   };
 
   return (
@@ -45,6 +53,13 @@ export function MiniPlayer() {
           style={styles.playBtn}
         >
           <Feather color={theme.colors.text} name={status.playing ? "pause" : "play"} size={20} />
+        </Pressable>
+        <Pressable
+          hitSlop={12}
+          onPress={closeMiniPlayer}
+          style={styles.closeBtn}
+        >
+          <Feather color={theme.colors.textMuted} name="x" size={18} />
         </Pressable>
       </View>
     </View>
@@ -106,5 +121,12 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: "center",
     width: 40,
+  },
+  closeBtn: {
+    alignItems: "center",
+    borderRadius: 18,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
   },
 });

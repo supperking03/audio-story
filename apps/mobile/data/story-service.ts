@@ -1,6 +1,9 @@
 import { nowPlaying as fallbackNowPlaying } from "../constants/mock-data";
 import { fetchJson } from "../lib/api";
 
+const episodeCache = new Map<string, { episode: Episode; expiresAt: number }>();
+const EPISODE_CACHE_TTL_MS = 1000 * 60 * 15;
+
 export type Episode = {
   id: string;
   title: string;
@@ -28,6 +31,7 @@ export type StorySeries = {
 
 type ApiEpisode = {
   id: string;
+  slug?: string;
   title: string;
   summary: string | null;
   episodeNumber: number | null;
@@ -37,8 +41,15 @@ type ApiEpisode = {
   transcriptText: string | null;
 };
 
+type ApiEpisodePreview = {
+  id: string;
+  title: string;
+  episodeNumber: number | null;
+};
+
 type ApiStory = {
   id: string;
+  slug?: string;
   title: string;
   author: string | null;
   description: string | null;
@@ -47,6 +58,18 @@ type ApiStory = {
   status: "DRAFT" | "ONGOING" | "COMPLETED" | "ARCHIVED";
   metadata: { mood?: string } | null;
   episodes: ApiEpisode[];
+};
+
+type ApiStoryPreview = {
+  id: string;
+  title: string;
+  author: string | null;
+  description: string | null;
+  coverImageUrl: string | null;
+  tags: string[];
+  status: "DRAFT" | "ONGOING" | "COMPLETED" | "ARCHIVED";
+  metadata: { mood?: string } | null;
+  episodes: ApiEpisodePreview[];
 };
 
 const gradients: [string, string][] = [
@@ -138,14 +161,69 @@ function mapStory(story: ApiStory): StorySeries {
   };
 }
 
+function mapPreviewEpisode(episode: ApiEpisodePreview): Episode {
+  return {
+    id: episode.id,
+    title: episode.title,
+    episodeNumber: episode.episodeNumber,
+    durationLabel: episode.episodeNumber ? `Tập ${episode.episodeNumber}` : "Tập truyện",
+    publishedAt: "Xem chi tiết",
+    summary: "",
+    audioUrl: null,
+    transcriptText: null
+  };
+}
+
+function mapPreviewStory(story: ApiStoryPreview): StorySeries {
+  const sortedEpisodes = [...story.episodes].sort((a, b) => (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0));
+
+  return {
+    id: story.id,
+    title: story.title,
+    author: story.author ?? "Chưa cập nhật",
+    coverColor: gradients[hashIndex(story.id)],
+    coverImageUrl: story.coverImageUrl,
+    mood: story.metadata?.mood ?? story.tags[0] ?? "Truyện audio",
+    description: story.description ?? "",
+    tags: story.tags,
+    status: story.status === "COMPLETED" ? "Completed" : "Ongoing",
+    latestEpisodeLabel: formatLatestEpisodeLabel(
+      sortedEpisodes.map((episode) => ({
+        ...episode,
+        summary: null,
+        audioUrl: null,
+        durationSec: null,
+        publishedAt: null,
+        transcriptText: null
+      }))
+    ),
+    episodes: sortedEpisodes.map(mapPreviewEpisode)
+  };
+}
+
 export async function loadStories() {
-  const data = await fetchJson<{ stories: ApiStory[] }>("/api/stories");
-  return data.stories.map(mapStory);
+  const data = await fetchJson<{ stories: ApiStoryPreview[] }>("/api/mobile/stories");
+  return data.stories.map(mapPreviewStory);
 }
 
 export async function loadStoryById(id: string) {
-  const data = await fetchJson<{ story: ApiStory }>(`/api/stories/${id}`);
+  const data = await fetchJson<{ story: ApiStory }>(`/api/mobile/stories/${id}`);
   return mapStory(data.story);
+}
+
+export async function loadEpisodeById(id: string) {
+  const cached = episodeCache.get(id);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.episode;
+  }
+
+  const data = await fetchJson<{ episode: ApiEpisode }>(`/api/episodes/${id}`);
+  const episode = mapEpisode(data.episode);
+  episodeCache.set(id, {
+    episode,
+    expiresAt: Date.now() + EPISODE_CACHE_TTL_MS,
+  });
+  return episode;
 }
 
 export function searchSeries(seriesList: StorySeries[], query: string) {

@@ -3,6 +3,7 @@ import { useEffect } from "react";
 
 let _player: AudioPlayer | null = null;
 let _currentEpisodeId: string | null = null;
+let _currentSource: string | null = null;
 
 export function getPlayer(): AudioPlayer {
   if (!_player) {
@@ -16,13 +17,14 @@ export function useSingletonPlayer(source: string | null, episodeId: string | nu
 
   useEffect(() => {
     if (!source || !episodeId) return;
-    if (episodeId === _currentEpisodeId) return; // same episode already loaded — don't restart
+    if (episodeId === _currentEpisodeId && source === _currentSource) return;
     _currentEpisodeId = episodeId;
+    _currentSource = source;
     player.replace({ uri: source });
     player.play();
     // player is a stable module-level singleton, not a reactive dep
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [episodeId]);
+  }, [episodeId, source]);
 
   return player;
 }

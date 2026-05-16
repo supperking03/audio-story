@@ -11,6 +11,8 @@ type StoryCardProps = {
 };
 
 export function StoryCard({ series, compact = false, onPress }: StoryCardProps) {
+  const metaParts = [series.author, series.tags[0]].filter(Boolean);
+
   return (
     <Pressable onPress={onPress}>
       <LinearGradient colors={series.coverColor} style={[styles.card, compact && styles.compactCard]}>
@@ -21,9 +23,12 @@ export function StoryCard({ series, compact = false, onPress }: StoryCardProps) 
           <Text style={styles.mood}>{series.mood}</Text>
           <Text style={styles.title}>{series.title}</Text>
           <View style={styles.metaRow}>
-            <Text style={styles.author}>{series.author}</Text>
-            <Text style={styles.dot}>•</Text>
-            <Text style={styles.author}>{series.tags[0]}</Text>
+            {metaParts.map((part, index) => (
+              <View key={`${series.id}-meta-${part}-${index}`} style={styles.metaItem}>
+                {index > 0 ? <Text style={styles.dot}>•</Text> : null}
+                <Text style={styles.author}>{part}</Text>
+              </View>
+            ))}
           </View>
         </View>
       </LinearGradient>
@@ -73,6 +78,11 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   metaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 6
+  },
+  metaItem: {
     alignItems: "center",
     flexDirection: "row",
     gap: 6
