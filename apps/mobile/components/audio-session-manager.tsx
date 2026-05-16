@@ -1,14 +1,17 @@
 import { setAudioModeAsync } from "expo-audio";
 import { useEffect } from "react";
+import { NativeEventEmitter, NativeModules } from "react-native";
 
 import { usePlayerMeta } from "../contexts/player-context";
 import { getPlayer } from "../hooks/use-singleton-player";
 
+const { RemoteCommandsModule } = NativeModules;
+const remoteEmitter = RemoteCommandsModule ? new NativeEventEmitter(RemoteCommandsModule) : null;
+
 export function AudioSessionManager() {
-  const { meta } = usePlayerMeta();
+  const { meta, remoteNextRef, remotePrevRef } = usePlayerMeta();
   const player = getPlayer();
 
-  // Set audio mode once on mount: background playback + silent mode
   useEffect(() => {
     setAudioModeAsync({
       playsInSilentMode: true,
@@ -17,9 +20,21 @@ export function AudioSessionManager() {
     }).catch(() => {});
   }, []);
 
-  // Update lock screen controls whenever the playing episode changes.
-  // Lives here (root layout) so it never unmounts — lock screen persists
-  // even when the user navigates away to the mini player.
+  // Enable next/previous lock screen commands and wire up callbacks via refs
+  useEffect(() => {
+    if (!RemoteCommandsModule || !remoteEmitter) return;
+    RemoteCommandsModule.enable();
+    const nextSub = remoteEmitter.addListener("onNextTrack", () => remoteNextRef.current?.());
+    const prevSub = remoteEmitter.addListener("onPreviousTrack", () => remotePrevRef.current?.());
+    return () => {
+      nextSub.remove();
+      prevSub.remove();
+      RemoteCommandsModule.disable();
+    };
+  // refs are stable — subscribe once
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!meta) return;
     try {
@@ -33,7 +48,6 @@ export function AudioSessionManager() {
         { showSeekBackward: true, showSeekForward: true }
       );
     } catch {}
-    // No cleanup — intentionally keep lock screen active while audio plays
   }, [meta, player]);
 
   return null;

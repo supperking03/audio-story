@@ -13,6 +13,8 @@
 		AB6A0EB972230BE1804A44EE /* libPods-BuBuTruynAudio.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 137977AD4B2EB5BE029F41C0 /* libPods-BuBuTruynAudio.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		BBF2986017670253953934F7 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C6D2AB2810CB527A9066EED8 /* PrivacyInfo.xcprivacy */; };
+		CC1111110000111100001112 /* RemoteCommandsModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1111110000111100001111 /* RemoteCommandsModule.swift */; };
+		CC3333330000333300003334 /* RemoteCommandsModuleBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = CC3333330000333300003333 /* RemoteCommandsModuleBridge.m */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 /* End PBXBuildFile section */
 
@@ -25,6 +27,8 @@
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = BuBuTruynAudio/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
 		C6D2AB2810CB527A9066EED8 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = BuBuTruynAudio/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		CC1111110000111100001111 /* RemoteCommandsModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = RemoteCommandsModule.swift; path = BuBuTruynAudio/RemoteCommandsModule.swift; sourceTree = "<group>"; };
+		CC3333330000333300003333 /* RemoteCommandsModuleBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; name = RemoteCommandsModuleBridge.m; path = BuBuTruynAudio/RemoteCommandsModuleBridge.m; sourceTree = "<group>"; };
 		D621E22229A17920D09E7ABE /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-BuBuTruynAudio/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		E8E3C729EC524427666E329E /* Pods-BuBuTruynAudio.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-BuBuTruynAudio.release.xcconfig"; path = "Target Support Files/Pods-BuBuTruynAudio/Pods-BuBuTruynAudio.release.xcconfig"; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
@@ -49,6 +53,8 @@
 			children = (
 				F11748412D0307B40044C1D9 /* AppDelegate.swift */,
 				F11748442D0722820044C1D9 /* BuBuTruynAudio-Bridging-Header.h */,
+				CC1111110000111100001111 /* RemoteCommandsModule.swift */,
+				CC3333330000333300003333 /* RemoteCommandsModuleBridge.m */,
 				BB2F792B24A3F905000567C9 /* Supporting */,
 				13B07FB51A68108700A75B9A /* Images.xcassets */,
 				13B07FB61A68108700A75B9A /* Info.plist */,
@@ -331,6 +337,8 @@
 			files = (
 				F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */,
 				A9579F255343A13C41A36F4E /* ExpoModulesProvider.swift in Sources */,
+				CC1111110000111100001112 /* RemoteCommandsModule.swift in Sources */,
+				CC3333330000333300003334 /* RemoteCommandsModuleBridge.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

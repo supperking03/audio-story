@@ -56,7 +56,7 @@ export default function PlayerScreen() {
   const [showTranscript, setShowTranscript] = useState(false);
   const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(params.episodeId ?? null);
   const [isEpisodeSwitching, setIsEpisodeSwitching] = useState(false);
-  const { setMeta } = usePlayerMeta();
+  const { setMeta, remoteNextRef, remotePrevRef } = usePlayerMeta();
 
   useEffect(() => {
     setCurrentEpisodeId(params.episodeId ?? null);
@@ -178,6 +178,12 @@ export default function PlayerScreen() {
 
   const episodeIndex = orderedEpisodes.findIndex((episode) => episode.id === currentEpisode?.id);
   const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
+
+  // Sync remote command callbacks each render so they always have the latest episode state
+  remoteNextRef.current = episodeIndex >= 0 && episodeIndex < orderedEpisodes.length - 1
+    ? () => changeEpisode(1) : null;
+  remotePrevRef.current = episodeIndex > 0
+    ? () => changeEpisode(-1) : null;
 
   const trackWidthRef = useRef(0);
   const statusRef = useRef(status);
