@@ -19,6 +19,20 @@ const MIN_SPEED = 0.5;
 const MAX_SPEED = 2.5;
 const SPEED_STEP = 0.1;
 
+const SLEEP_TIMER_OPTIONS = [
+  { key: "off", label: "Tắt", shortLabel: "Tắt" },
+  { key: "10m", label: "10 phút", minutes: 10, shortLabel: "10p" },
+  { key: "15m", label: "15 phút", minutes: 15, shortLabel: "15p" },
+  { key: "20m", label: "20 phút", minutes: 20, shortLabel: "20p" },
+  { key: "30m", label: "30 phút", minutes: 30, shortLabel: "30p" },
+  { key: "45m", label: "45 phút", minutes: 45, shortLabel: "45p" },
+  { key: "60m", label: "1 giờ", minutes: 60, shortLabel: "1h" },
+  { key: "episode", label: "Hết tập hiện tại", shortLabel: "Hết tập" },
+] as const;
+
+type SleepTimerOptionKey = typeof SLEEP_TIMER_OPTIONS[number]["key"];
+type SleepTimerOption = typeof SLEEP_TIMER_OPTIONS[number];
+
 
 function formatClock(seconds?: number) {
   if (!seconds || Number.isNaN(seconds)) {
@@ -53,6 +67,9 @@ export default function PlayerScreen() {
   const [selectedSpeed, setSelectedSpeed] = useState(1.2);
   const [speedInputValue, setSpeedInputValue] = useState("1.2");
   const [showSpeedEditor, setShowSpeedEditor] = useState(false);
+  const [showSleepTimerSheet, setShowSleepTimerSheet] = useState(false);
+  const [sleepTimerKey, setSleepTimerKey] = useState<SleepTimerOptionKey>("off");
+  const [sleepTimerEndsAt, setSleepTimerEndsAt] = useState<number | null>(null);
   const [showEpisodes, setShowEpisodes] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(params.episodeId ?? null);
@@ -60,10 +77,66 @@ export default function PlayerScreen() {
   const [episodeAssets, setEpisodeAssets] = useState<Record<string, Episode>>({});
   const [episodeAssetError, setEpisodeAssetError] = useState<string | null>(null);
   const { setMeta, remoteNextRef, remotePrevRef } = usePlayerMeta();
+  const sleepTimerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearSleepTimer = () => {
+    if (sleepTimerTimeoutRef.current) {
+      clearTimeout(sleepTimerTimeoutRef.current);
+      sleepTimerTimeoutRef.current = null;
+    }
+    setSleepTimerKey("off");
+    setSleepTimerEndsAt(null);
+  };
+
+  const applySleepTimer = (nextKey: SleepTimerOptionKey) => {
+    if (sleepTimerTimeoutRef.current) {
+      clearTimeout(sleepTimerTimeoutRef.current);
+      sleepTimerTimeoutRef.current = null;
+    }
+
+    if (nextKey === "off") {
+      setSleepTimerKey("off");
+      setSleepTimerEndsAt(null);
+      setShowSleepTimerSheet(false);
+      return;
+    }
+
+    if (nextKey === "episode") {
+      setSleepTimerKey("episode");
+      setSleepTimerEndsAt(null);
+      setShowSleepTimerSheet(false);
+      return;
+    }
+
+    const selectedOption = SLEEP_TIMER_OPTIONS.find((option) => option.key === nextKey) as SleepTimerOption | undefined;
+    if (!selectedOption || !("minutes" in selectedOption)) {
+      return;
+    }
+
+    const timeoutMs = selectedOption.minutes * 60 * 1000;
+    const targetTime = Date.now() + timeoutMs;
+    setSleepTimerKey(nextKey);
+    setSleepTimerEndsAt(targetTime);
+    sleepTimerTimeoutRef.current = setTimeout(() => {
+      player.pause();
+      setSleepTimerKey("off");
+      setSleepTimerEndsAt(null);
+      sleepTimerTimeoutRef.current = null;
+    }, timeoutMs);
+    setShowSleepTimerSheet(false);
+  };
 
   useEffect(() => {
     setCurrentEpisodeId(params.episodeId ?? null);
   }, [params.episodeId]);
+
+  useEffect(() => {
+    return () => {
+      if (sleepTimerTimeoutRef.current) {
+        clearTimeout(sleepTimerTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     hasResumedRef.current = false;
@@ -204,6 +277,12 @@ export default function PlayerScreen() {
     }
 
     didHandleFinishRef.current = true;
+    if (sleepTimerKey === "episode") {
+      clearSleepTimer();
+      player.pause();
+      clearProgress(baseSeries.id);
+      return;
+    }
     const currentIndex = orderedEpisodes.findIndex((episode) => episode.id === currentEpisode.id);
     const nextEpisode = currentIndex >= 0 ? orderedEpisodes[currentIndex + 1] : null;
 
@@ -218,10 +297,23 @@ export default function PlayerScreen() {
     if (status.didJustFinish && baseSeries) {
       clearProgress(baseSeries.id);
     }
-  }, [baseSeries, currentEpisode, orderedEpisodes, status.didJustFinish]);
+  }, [baseSeries, currentEpisode, orderedEpisodes, player, sleepTimerKey, status.didJustFinish]);
 
   const episodeIndex = orderedEpisodes.findIndex((episode) => episode.id === currentEpisode?.id);
   const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
+  const sleepTimerLabel = useMemo(() => {
+    const activeOption = SLEEP_TIMER_OPTIONS.find((option) => option.key === sleepTimerKey);
+    if (!activeOption) {
+      return "Tắt";
+    }
+
+    if (sleepTimerKey !== "episode" || !sleepTimerEndsAt) {
+      return activeOption.shortLabel;
+    }
+
+    const remainingMinutes = Math.max(1, Math.ceil((sleepTimerEndsAt - Date.now()) / 60_000));
+    return `${remainingMinutes}p`;
+  }, [sleepTimerEndsAt, sleepTimerKey]);
 
   // Sync remote command callbacks each render so they always have the latest episode state
   remoteNextRef.current = episodeIndex >= 0 && episodeIndex < orderedEpisodes.length - 1
@@ -457,7 +549,7 @@ export default function PlayerScreen() {
           />
         </View>
 
-        <View style={styles.speedSection}>
+        <View style={styles.inlineSettingsSection}>
           <View style={styles.speedControlRow}>
             <Text style={styles.speedInlineLabel}>Tốc độ</Text>
             <Pressable onPress={() => adjustSpeed(-SPEED_STEP)} style={styles.speedAdjustButton}>
@@ -468,6 +560,12 @@ export default function PlayerScreen() {
             </Pressable>
             <Pressable onPress={() => adjustSpeed(SPEED_STEP)} style={styles.speedAdjustButton}>
               <Feather color={theme.colors.text} name="plus" size={16} />
+            </Pressable>
+          </View>
+          <View style={styles.speedControlRow}>
+            <Text style={styles.speedInlineLabel}>Hẹn giờ</Text>
+            <Pressable onPress={() => setShowSleepTimerSheet(true)} style={styles.speedValueButton}>
+              <Text style={styles.speedValueButtonText}>{sleepTimerLabel}</Text>
             </Pressable>
           </View>
         </View>
@@ -569,6 +667,29 @@ export default function PlayerScreen() {
               </View>
             </View>
           </KeyboardAvoidingView>
+        </Modal>
+
+        <Modal animationType="slide" transparent visible={showSleepTimerSheet} onRequestClose={() => setShowSleepTimerSheet(false)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowSleepTimerSheet(false)} />
+          <View style={styles.sheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.sheetTitle}>Hẹn giờ tắt</Text>
+            <View style={styles.sleepOptions}>
+              {SLEEP_TIMER_OPTIONS.map((option) => {
+                const isActive = option.key === sleepTimerKey;
+                return (
+                  <Pressable
+                    key={option.key}
+                    onPress={() => applySleepTimer(option.key)}
+                    style={[styles.sleepOptionRow, isActive && styles.sleepOptionRowActive]}
+                  >
+                    <Text style={[styles.sleepOptionText, isActive && styles.sleepOptionTextActive]}>{option.label}</Text>
+                    {isActive ? <Feather color={theme.colors.warning} name="check" size={18} /> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
         </Modal>
       </ScrollView>
       </KeyboardAvoidingView>
@@ -750,8 +871,9 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.45
   },
-  speedSection: {
-    alignItems: "flex-start"
+  inlineSettingsSection: {
+    alignItems: "flex-start",
+    gap: 12
   },
   speedControlRow: {
     alignItems: "center",
@@ -916,6 +1038,32 @@ const styles = StyleSheet.create({
   sheetList: {
     gap: 8,
     paddingHorizontal: theme.spacing.lg
+  },
+  sleepOptions: {
+    gap: 6,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: 20
+  },
+  sleepOptionRow: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surfaceElevated,
+    borderRadius: theme.radius.md,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 14
+  },
+  sleepOptionRowActive: {
+    borderColor: theme.colors.warning,
+    borderWidth: 1
+  },
+  sleepOptionText: {
+    color: theme.colors.text,
+    fontSize: 15,
+    fontWeight: "700"
+  },
+  sleepOptionTextActive: {
+    color: theme.colors.warning
   },
   sheetRow: {
     alignItems: "center",
