@@ -4,6 +4,7 @@ import { fetchJson } from "../lib/api";
 export type Episode = {
   id: string;
   title: string;
+  episodeNumber?: number | null;
   durationLabel: string;
   publishedAt: string;
   summary: string;
@@ -87,7 +88,7 @@ function formatDurationLabel(durationSec: number | null) {
 }
 
 function formatLatestEpisodeLabel(episodes: ApiEpisode[]) {
-  const latest = episodes[0];
+  const latest = episodes[episodes.length - 1];
   if (!latest) {
     return "Chưa có tập";
   }
@@ -103,6 +104,7 @@ function mapEpisode(episode: ApiEpisode): Episode {
   return {
     id: episode.id,
     title: episode.title,
+    episodeNumber: episode.episodeNumber,
     durationLabel: formatDurationLabel(episode.durationSec),
     publishedAt: formatPublishedAt(episode.publishedAt),
     summary: episode.summary ?? "",
@@ -113,12 +115,12 @@ function mapEpisode(episode: ApiEpisode): Episode {
 
 function mapStory(story: ApiStory): StorySeries {
   const sortedEpisodes = [...story.episodes].sort((a, b) => {
-    const episodeDiff = (b.episodeNumber ?? 0) - (a.episodeNumber ?? 0);
+    const episodeDiff = (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0);
     if (episodeDiff !== 0) {
       return episodeDiff;
     }
 
-    return new Date(b.publishedAt ?? 0).getTime() - new Date(a.publishedAt ?? 0).getTime();
+    return new Date(a.publishedAt ?? 0).getTime() - new Date(b.publishedAt ?? 0).getTime();
   });
 
   return {

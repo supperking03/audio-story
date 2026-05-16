@@ -57,7 +57,7 @@ export default function SeriesDetailScreen() {
     );
   }
 
-  const latestEpisode = series.episodes[0];
+  const latestEpisode = series.episodes[series.episodes.length - 1];
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -150,7 +150,7 @@ export default function SeriesDetailScreen() {
               <EpisodeRow
                 key={episode.id}
                 episode={episode}
-                highlighted={index === 0}
+                highlighted={index === series.episodes.length - 1}
                 onPress={() =>
                   router.push({
                     pathname: "/player",

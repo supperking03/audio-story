@@ -34,7 +34,7 @@ export function AudioSessionManager() {
       );
     } catch {}
     // No cleanup — intentionally keep lock screen active while audio plays
-  }, [meta?.episodeId, meta?.seriesTitle, meta?.coverImageUrl]);
+  }, [meta, player]);
 
   return null;
 }

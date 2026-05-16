@@ -3,7 +3,7 @@ import { useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Animated, FlatList, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, FlatList, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingIndicator } from "../components/loading-indicator";
@@ -15,7 +15,9 @@ import { useSingletonPlayer } from "../hooks/use-singleton-player";
 import { useStory } from "../hooks/use-story";
 import { clearProgress, saveProgress } from "../lib/playback-store";
 
-const speedOptions = ["0.8x", "1.0x", "1.1x", "1.2x", "1.3x", "1.5x", "2.0x"];
+const MIN_SPEED = 0.5;
+const MAX_SPEED = 2.5;
+const SPEED_STEP = 0.1;
 
 
 function formatClock(seconds?: number) {
@@ -30,6 +32,15 @@ function formatClock(seconds?: number) {
   return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function snapSpeed(value: number) {
+  const snapped = Math.round(value / SPEED_STEP) * SPEED_STEP;
+  return Number(clamp(snapped, MIN_SPEED, MAX_SPEED).toFixed(1));
+}
+
 export default function PlayerScreen() {
   const nowPlaying = getFallbackNowPlaying();
   const { isTablet, hPad } = useResponsive();
@@ -38,7 +49,9 @@ export default function PlayerScreen() {
   const hasResumedRef = useRef(false);
   const seriesId = params.seriesId ?? nowPlaying.seriesId;
   const { story: baseSeries, isLoading } = useStory(seriesId);
-  const [selectedSpeed, setSelectedSpeed] = useState("1.2x");
+  const [selectedSpeed, setSelectedSpeed] = useState(1.2);
+  const [speedInputValue, setSpeedInputValue] = useState("1.2");
+  const [showSpeedEditor, setShowSpeedEditor] = useState(false);
   const [showEpisodes, setShowEpisodes] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
   const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(params.episodeId ?? null);
@@ -49,20 +62,31 @@ export default function PlayerScreen() {
     setCurrentEpisodeId(params.episodeId ?? null);
   }, [params.episodeId]);
 
+  const orderedEpisodes = useMemo(() => {
+    return [...(baseSeries?.episodes ?? [])].sort((a, b) => {
+      const episodeDiff = (a.episodeNumber ?? 0) - (b.episodeNumber ?? 0);
+      if (episodeDiff !== 0) {
+        return episodeDiff;
+      }
+
+      return a.title.localeCompare(b.title, "vi");
+    });
+  }, [baseSeries?.episodes]);
+
   const currentEpisode = useMemo(() => {
     if (currentEpisodeId) {
-      return baseSeries?.episodes.find((episode) => episode.id === currentEpisodeId) ?? null;
+      return orderedEpisodes.find((episode) => episode.id === currentEpisodeId) ?? null;
     }
 
-    return baseSeries?.episodes[0] ?? null;
-  }, [baseSeries, currentEpisodeId]);
+    return orderedEpisodes[orderedEpisodes.length - 1] ?? null;
+  }, [currentEpisodeId, orderedEpisodes]);
 
   const player = useSingletonPlayer(currentEpisode?.audioUrl ?? null, currentEpisode?.id ?? null);
   const status = useAudioPlayerStatus(player);
   const hasAudio = Boolean(currentEpisode?.audioUrl);
 
   useEffect(() => {
-    if (!isEpisodeSwitching || !currentEpisode) {
+    if (!isEpisodeSwitching || !currentEpisode?.id) {
       return;
     }
 
@@ -85,12 +109,15 @@ export default function PlayerScreen() {
         coverImageUrl: baseSeries.coverImageUrl,
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEpisode?.id, baseSeries?.id]);
+  }, [baseSeries, currentEpisode, setMeta]);
 
   useEffect(() => {
-    player.setPlaybackRate(Number.parseFloat(selectedSpeed), "medium");
+    player.setPlaybackRate(selectedSpeed, "medium");
   }, [player, selectedSpeed]);
+
+  useEffect(() => {
+    setSpeedInputValue(selectedSpeed.toFixed(1));
+  }, [selectedSpeed]);
 
   // Seek to resume position once audio duration is known
   useEffect(() => {
@@ -103,11 +130,11 @@ export default function PlayerScreen() {
 
   // Auto-save progress every 5 seconds while playing
   const saveTickRef = useRef(-1);
+  const playbackTick = Math.floor(status.currentTime / 5);
   useEffect(() => {
     if (!baseSeries || !currentEpisode || !status.playing) return;
-    const tick = Math.floor(status.currentTime / 5);
-    if (tick === saveTickRef.current) return;
-    saveTickRef.current = tick;
+    if (playbackTick === saveTickRef.current) return;
+    saveTickRef.current = playbackTick;
     if (status.currentTime < 10) return;
     saveProgress(baseSeries.id, {
       episodeId: currentEpisode.id,
@@ -115,17 +142,41 @@ export default function PlayerScreen() {
       currentTime: status.currentTime,
       savedAt: Date.now(),
     });
-  }, [Math.floor(status.currentTime / 5), status.playing]);
+  }, [baseSeries, currentEpisode, playbackTick, status.currentTime, status.playing]);
 
-  // Clear progress when episode finishes
+  const didHandleFinishRef = useRef(false);
   useEffect(() => {
+    if (!currentEpisode || !baseSeries) {
+      return;
+    }
+
+    if (!status.didJustFinish) {
+      didHandleFinishRef.current = false;
+      return;
+    }
+
+    if (didHandleFinishRef.current) {
+      return;
+    }
+
+    didHandleFinishRef.current = true;
+    const currentIndex = orderedEpisodes.findIndex((episode) => episode.id === currentEpisode.id);
+    const nextEpisode = currentIndex >= 0 ? orderedEpisodes[currentIndex + 1] : null;
+
+    if (nextEpisode) {
+      saveTickRef.current = -1;
+      hasResumedRef.current = false;
+      setIsEpisodeSwitching(true);
+      setCurrentEpisodeId(nextEpisode.id);
+      return;
+    }
+
     if (status.didJustFinish && baseSeries) {
       clearProgress(baseSeries.id);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status.didJustFinish]);
+  }, [baseSeries, currentEpisode, orderedEpisodes, status.didJustFinish]);
 
-  const episodeIndex = baseSeries?.episodes.findIndex((episode) => episode.id === currentEpisode?.id) ?? -1;
+  const episodeIndex = orderedEpisodes.findIndex((episode) => episode.id === currentEpisode?.id);
   const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
 
   const trackWidthRef = useRef(0);
@@ -137,6 +188,9 @@ export default function PlayerScreen() {
   hasAudioRef.current = hasAudio;
   const isDraggingRef = useRef(false);
   const postSeekProgressRef = useRef<number | null>(null);
+  const trackPageXRef = useRef(0);
+  const lastKnownRatioRef = useRef(0);
+  const lastDragTimeUpdateRef = useRef(0);
 
   const animatedProgress = useRef(new Animated.Value(progress)).current;
   const animatedFillWidth = useMemo(
@@ -148,6 +202,27 @@ export default function PlayerScreen() {
     [animatedProgress]
   );
   const [dragDisplayTime, setDragDisplayTime] = useState<number | null>(null);
+
+  const applySpeedValue = (value: number) => {
+    const nextSpeed = snapSpeed(value);
+    setSelectedSpeed(nextSpeed);
+    setSpeedInputValue(nextSpeed.toFixed(1));
+  };
+
+  const adjustSpeed = (delta: number) => {
+    applySpeedValue(selectedSpeed + delta);
+  };
+
+  const commitSpeedInput = () => {
+    const normalized = speedInputValue.replace(",", ".").trim();
+    const parsed = Number(normalized);
+    if (Number.isNaN(parsed)) {
+      setSpeedInputValue(selectedSpeed.toFixed(1));
+      return;
+    }
+    applySpeedValue(parsed);
+    setShowSpeedEditor(false);
+  };
 
   // Runs synchronously after every committed render, before paint.
   // Keeps bar in sync with playback; postSeekProgressRef holds target position
@@ -168,20 +243,31 @@ export default function PlayerScreen() {
     PanResponder.create({
       onStartShouldSetPanResponder: () => hasAudioRef.current && statusRef.current.duration > 0,
       onMoveShouldSetPanResponder: () => hasAudioRef.current && statusRef.current.duration > 0,
+      // Never yield the gesture to another responder once started
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (evt) => {
         isDraggingRef.current = true;
+        lastDragTimeUpdateRef.current = 0;
         if (statusRef.current.playing) playerRef.current.pause();
+        trackPageXRef.current = evt.nativeEvent.pageX - evt.nativeEvent.locationX;
         const ratio = Math.min(Math.max(evt.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+        lastKnownRatioRef.current = ratio;
         animatedProgress.setValue(ratio);
         setDragDisplayTime(ratio * statusRef.current.duration);
       },
-      onPanResponderMove: (evt) => {
-        const ratio = Math.min(Math.max(evt.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+      onPanResponderMove: (_, gestureState) => {
+        const ratio = Math.min(Math.max((gestureState.moveX - trackPageXRef.current) / trackWidthRef.current, 0), 1);
+        lastKnownRatioRef.current = ratio;
         animatedProgress.setValue(ratio);
-        setDragDisplayTime(ratio * statusRef.current.duration);
+        const now = Date.now();
+        if (now - lastDragTimeUpdateRef.current > 80) {
+          lastDragTimeUpdateRef.current = now;
+          setDragDisplayTime(ratio * statusRef.current.duration);
+        }
       },
-      onPanResponderRelease: (evt) => {
-        const ratio = Math.min(Math.max(evt.nativeEvent.locationX / trackWidthRef.current, 0), 1);
+      onPanResponderRelease: () => {
+        // Use lastKnownRatioRef — always correct whether tap or drag
+        const ratio = lastKnownRatioRef.current;
         isDraggingRef.current = false;
         postSeekProgressRef.current = ratio;
         setDragDisplayTime(null);
@@ -199,9 +285,12 @@ export default function PlayerScreen() {
 
   const changeEpisode = (direction: -1 | 1) => {
     if (!baseSeries || episodeIndex < 0) return;
-    const nextEpisode = baseSeries.episodes[episodeIndex + direction];
+    const nextEpisode = orderedEpisodes[episodeIndex + direction];
     if (!nextEpisode) return;
+    saveTickRef.current = -1;
+    hasResumedRef.current = false;
     setIsEpisodeSwitching(true);
+    setShowTranscript(false);
     setCurrentEpisodeId(nextEpisode.id);
   };
 
@@ -237,7 +326,15 @@ export default function PlayerScreen() {
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <View style={[styles.content, isTablet && { paddingHorizontal: hPad }]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 48 : 0}
+        style={styles.keyboardContainer}
+      >
+      <ScrollView
+        contentContainerStyle={[styles.content, isTablet && { paddingHorizontal: hPad }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.headerRow}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Feather color={theme.colors.text} name="arrow-left" size={18} />
@@ -260,13 +357,14 @@ export default function PlayerScreen() {
 
         <View style={styles.metaSection}>
           <Text style={styles.storyEpisode}>
-            {currentEpisode?.durationLabel ?? "Chưa rõ"} • {selectedSpeed}
+            {currentEpisode?.durationLabel ?? "Chưa rõ"} • {selectedSpeed.toFixed(1)}x
           </Text>
           {!hasAudio ? <Text style={styles.helperText}>Tập này chưa có file audio thật.</Text> : null}
         </View>
 
         <View style={styles.timeline}>
           <View
+            hitSlop={{ top: 20, bottom: 20, left: 8, right: 8 }}
             style={styles.timelineWrapper}
             onLayout={(e) => { trackWidthRef.current = e.nativeEvent.layout.width; }}
             {...panResponder.panHandlers}
@@ -283,8 +381,13 @@ export default function PlayerScreen() {
         </View>
 
         <View style={styles.controls}>
-          <ControlButton disabled={!hasAudio} icon="rotate-ccw" label="15s" onPress={() => seekBy(-15)} />
-          <ControlButton disabled={!baseSeries || episodeIndex >= baseSeries.episodes.length - 1} icon="skip-back" label="" onPress={() => changeEpisode(1)} />
+          <ControlButton
+            disabled={episodeIndex <= 0}
+            icon="skip-back"
+            label="Tập trước"
+            onPress={() => changeEpisode(-1)}
+          />
+          <ControlButton disabled={!hasAudio} icon="rotate-ccw" label="-15s" onPress={() => seekBy(-15)} />
           <Pressable
             disabled={!hasAudio}
             onPress={togglePlayback}
@@ -292,26 +395,34 @@ export default function PlayerScreen() {
           >
             <Feather color="#11131C" name={status.playing ? "pause" : "play"} size={26} />
           </Pressable>
-          <ControlButton disabled={!baseSeries || episodeIndex <= 0} icon="skip-forward" label="" onPress={() => changeEpisode(-1)} />
-          <ControlButton disabled={!hasAudio} icon="rotate-cw" label="30s" onPress={() => seekBy(30)} />
+          <ControlButton disabled={!hasAudio} icon="rotate-cw" label="+15s" onPress={() => seekBy(15)} />
+          <ControlButton
+            disabled={episodeIndex < 0 || episodeIndex >= orderedEpisodes.length - 1}
+            icon="skip-forward"
+            label="Tập sau"
+            onPress={() => changeEpisode(1)}
+          />
         </View>
 
-        <View style={styles.speedRow}>
-          {speedOptions.map((option) => (
-            <Pressable
-              key={option}
-              onPress={() => setSelectedSpeed(option)}
-              style={[styles.speedChip, option === selectedSpeed && styles.speedChipActive]}
-            >
-              <Text style={[styles.speedText, option === selectedSpeed && styles.speedTextActive]}>{option}</Text>
+        <View style={styles.speedSection}>
+          <View style={styles.speedControlRow}>
+            <Text style={styles.speedInlineLabel}>Tốc độ</Text>
+            <Pressable onPress={() => adjustSpeed(-SPEED_STEP)} style={styles.speedAdjustButton}>
+              <Feather color={theme.colors.text} name="minus" size={16} />
             </Pressable>
-          ))}
+            <Pressable onPress={() => setShowSpeedEditor(true)} style={styles.speedValueButton}>
+              <Text style={styles.speedValueButtonText}>{selectedSpeed.toFixed(1)}</Text>
+            </Pressable>
+            <Pressable onPress={() => adjustSpeed(SPEED_STEP)} style={styles.speedAdjustButton}>
+              <Feather color={theme.colors.text} name="plus" size={16} />
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.utilityRow}>
           <UtilityTile
             label="Danh sách tập"
-            value={`${baseSeries?.episodes.length ?? 0}`}
+            value={`${orderedEpisodes.length}`}
             onPress={baseSeries ? () => setShowEpisodes(true) : undefined}
           />
           <UtilityTile
@@ -338,7 +449,7 @@ export default function PlayerScreen() {
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>Danh sách tập</Text>
             <FlatList
-              data={baseSeries?.episodes ?? []}
+              data={orderedEpisodes}
               keyExtractor={(ep) => ep.id}
               contentContainerStyle={styles.sheetList}
               renderItem={({ item: ep }) => {
@@ -348,6 +459,8 @@ export default function PlayerScreen() {
                     style={[styles.sheetRow, isCurrent && styles.sheetRowActive]}
                     onPress={() => {
                       setShowEpisodes(false);
+                      saveTickRef.current = -1;
+                      hasResumedRef.current = false;
                       setIsEpisodeSwitching(true);
                       setCurrentEpisodeId(ep.id);
                     }}
@@ -365,7 +478,47 @@ export default function PlayerScreen() {
             />
           </View>
         </Modal>
-      </View>
+
+        <Modal animationType="slide" transparent visible={showSpeedEditor} onRequestClose={() => setShowSpeedEditor(false)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowSpeedEditor(false)} />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 0}
+          >
+            <View style={styles.speedSheet}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.sheetTitle}>Tốc độ nghe</Text>
+              <View style={styles.speedEditorRow}>
+                <Pressable onPress={() => adjustSpeed(-SPEED_STEP)} style={styles.speedAdjustButtonLarge}>
+                  <Feather color={theme.colors.text} name="minus" size={18} />
+                </Pressable>
+                <TextInput
+                  autoFocus
+                  keyboardType="decimal-pad"
+                  onBlur={commitSpeedInput}
+                  onChangeText={setSpeedInputValue}
+                  onSubmitEditing={commitSpeedInput}
+                  returnKeyType="done"
+                  style={styles.speedEditorInput}
+                  value={speedInputValue}
+                />
+                <Pressable onPress={() => adjustSpeed(SPEED_STEP)} style={styles.speedAdjustButtonLarge}>
+                  <Feather color={theme.colors.text} name="plus" size={18} />
+                </Pressable>
+              </View>
+              <View style={styles.speedEditorActions}>
+                <Pressable onPress={() => setShowSpeedEditor(false)} style={styles.speedEditorSecondary}>
+                  <Text style={styles.speedEditorSecondaryText}>Đóng</Text>
+                </Pressable>
+                <Pressable onPress={commitSpeedInput} style={styles.speedEditorPrimary}>
+                  <Text style={styles.speedEditorPrimaryText}>Xong</Text>
+                </Pressable>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+      </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -410,6 +563,9 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: theme.spacing.xl,
     padding: theme.spacing.lg
+  },
+  keyboardContainer: {
+    flex: 1
   },
   headerRow: {
     alignItems: "center",
@@ -518,8 +674,8 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     alignItems: "center",
-    gap: 2,
-    minWidth: 36
+    gap: 6,
+    minWidth: 56
   },
   controlLabel: {
     color: theme.colors.textMuted,
@@ -541,27 +697,111 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.45
   },
-  speedRow: {
+  speedSection: {
+    alignItems: "flex-start"
+  },
+  speedControlRow: {
+    alignItems: "center",
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
+    gap: 8
   },
-  speedChip: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 10
-  },
-  speedChipActive: {
-    backgroundColor: theme.colors.accent
-  },
-  speedText: {
-    color: theme.colors.text,
+  speedInlineLabel: {
+    color: theme.colors.textMuted,
     fontSize: 13,
+    fontWeight: "700",
+    marginRight: 4
+  },
+  speedValueButton: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.line,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    minWidth: 54,
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  speedValueButtonText: {
+    color: theme.colors.text,
+    fontSize: 15,
+    fontWeight: "700",
+    textAlign: "center"
+  },
+  speedAdjustButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.line,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    height: 34,
+    justifyContent: "center",
+    width: 34
+  },
+  speedSheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    gap: 16,
+    padding: theme.spacing.lg,
+    paddingBottom: 32
+  },
+  speedEditorRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "center"
+  },
+  speedAdjustButtonLarge: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surfaceElevated,
+    borderColor: theme.colors.line,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    height: 44,
+    justifyContent: "center",
+    width: 44
+  },
+  speedEditorInput: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.line,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    color: theme.colors.text,
+    fontSize: 20,
+    fontWeight: "700",
+    minWidth: 88,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    textAlign: "center"
+  },
+  speedEditorActions: {
+    flexDirection: "row",
+    gap: 12
+  },
+  speedEditorSecondary: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surfaceElevated,
+    borderRadius: theme.radius.md,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 44
+  },
+  speedEditorSecondaryText: {
+    color: theme.colors.text,
+    fontSize: 15,
     fontWeight: "700"
   },
-  speedTextActive: {
-    color: "#11131C"
+  speedEditorPrimary: {
+    alignItems: "center",
+    backgroundColor: theme.colors.warning,
+    borderRadius: theme.radius.md,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 44
+  },
+  speedEditorPrimaryText: {
+    color: "#11131C",
+    fontSize: 15,
+    fontWeight: "800"
   },
   utilityRow: {
     flexDirection: "row",
