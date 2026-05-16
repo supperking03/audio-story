@@ -409,7 +409,9 @@ export default function PlayerScreen() {
           <Text style={styles.storyEpisode}>
             {currentEpisode?.durationLabel ?? "Chưa rõ"} • {selectedSpeed.toFixed(1)}x
           </Text>
-          {!hasAudio ? <Text style={styles.helperText}>Tập này chưa có file audio thật.</Text> : null}
+          {!hasAudio && !isEpisodeSwitching && !episodeAssetError ? (
+            <Text style={styles.helperText}>Tập này chưa có file audio thật.</Text>
+          ) : null}
           {episodeAssetError ? <Text style={styles.helperText}>Lỗi tải audio: {episodeAssetError}</Text> : null}
         </View>
 
