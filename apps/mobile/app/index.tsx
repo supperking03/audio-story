@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "r
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingIndicator } from "../components/loading-indicator";
+import { RequestStoryCard } from "../components/request-story-card";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
 import { browseTerms } from "../constants/mock-data";
@@ -71,6 +72,8 @@ export default function HomeScreen() {
             ))}
           </View>
         </View>
+
+        <RequestStoryCard />
       </ScrollView>
     </SafeAreaView>
   );

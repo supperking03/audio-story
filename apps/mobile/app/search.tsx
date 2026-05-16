@@ -1,11 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { EpisodeRow } from "../components/episode-row";
 import { LoadingIndicator } from "../components/loading-indicator";
+import { RequestStoryCard } from "../components/request-story-card";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
 import { browseTerms } from "../constants/mock-data";
@@ -45,76 +46,92 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={[styles.content, isTablet && { paddingHorizontal: hPad }]}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Feather color={theme.colors.text} name="arrow-left" size={18} />
-          </Pressable>
-          <Text style={styles.title}>Tìm kiếm</Text>
-        </View>
-
-        <View style={styles.searchBox}>
-          <Feather color={theme.colors.textMuted} name="search" size={18} />
-          <TextInput
-            autoFocus
-            onChangeText={setQuery}
-            placeholder="Tên truyện, tác giả, mood..."
-            placeholderTextColor={theme.colors.textMuted}
-            style={styles.input}
-            value={query}
-          />
-        </View>
-
-        <View style={styles.chips}>
-          {browseTerms.map((term) => (
-            <Pressable key={term} onPress={() => setQuery(term)} style={styles.chip}>
-              <Text style={styles.chipText}>{term}</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 24 : 0}
+        style={styles.keyboardContainer}
+      >
+        <ScrollView
+          contentContainerStyle={[styles.content, isTablet && { paddingHorizontal: hPad }]}
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.header}>
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
+              <Feather color={theme.colors.text} name="arrow-left" size={18} />
             </Pressable>
-          ))}
-        </View>
+            <Text style={styles.title}>Tìm kiếm</Text>
+          </View>
 
-        <View style={styles.section}>
-          <SectionHeader title={query ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
-          {isLoading ? <LoadingIndicator label="Đang tải truyện..." /> : null}
-          {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
-          <View style={[styles.resultList, isTablet && styles.resultListTablet]}>
-            {results.map((series) => (
-              <View key={series.id} style={isTablet ? styles.resultGridItem : null}>
-                <StoryCard compact onPress={() => openSeries(series.id)} series={series} />
-              </View>
+          <View style={styles.searchBox}>
+            <Feather color={theme.colors.textMuted} name="search" size={18} />
+            <TextInput
+              autoFocus
+              onChangeText={setQuery}
+              placeholder="Tên truyện, tác giả, mood..."
+              placeholderTextColor={theme.colors.textMuted}
+              style={styles.input}
+              value={query}
+            />
+          </View>
+
+          <View style={styles.chips}>
+            {browseTerms.map((term) => (
+              <Pressable key={term} onPress={() => setQuery(term)} style={styles.chip}>
+                <Text style={styles.chipText}>{term}</Text>
+              </Pressable>
             ))}
           </View>
-        </View>
 
-        {episodeResults.length > 0 ? (
           <View style={styles.section}>
-            <SectionHeader title="Tập liên quan" />
-            <View style={styles.episodeList}>
-              {episodeResults.map((episode) => (
-                <EpisodeRow
-                  key={episode.id}
-                  episode={episode}
-                  onPress={() => {
-                    const parentSeries = results.find((series) =>
-                      series.episodes.some((seriesEpisode) => seriesEpisode.id === episode.id)
-                    );
-                    if (parentSeries) {
-                      openEpisode(parentSeries.id, episode.id);
-                    }
-                  }}
-                />
+            <SectionHeader title={query ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
+            {isLoading ? <LoadingIndicator label="Đang tải truyện..." /> : null}
+            {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
+            <View style={[styles.resultList, isTablet && styles.resultListTablet]}>
+              {results.map((series) => (
+                <View key={series.id} style={isTablet ? styles.resultGridItem : null}>
+                  <StoryCard compact onPress={() => openSeries(series.id)} series={series} />
+                </View>
               ))}
             </View>
           </View>
-        ) : null}
 
-        {query && results.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>Không thấy kết quả phù hợp</Text>
-            <Text style={styles.emptyText}>Thử đổi mood hoặc tìm theo tên tác giả.</Text>
-          </View>
-        ) : null}
-      </ScrollView>
+          {episodeResults.length > 0 ? (
+            <View style={styles.section}>
+              <SectionHeader title="Tập liên quan" />
+              <View style={styles.episodeList}>
+                {episodeResults.map((episode) => (
+                  <EpisodeRow
+                    key={episode.id}
+                    episode={episode}
+                    onPress={() => {
+                      const parentSeries = results.find((series) =>
+                        series.episodes.some((seriesEpisode) => seriesEpisode.id === episode.id)
+                      );
+                      if (parentSeries) {
+                        openEpisode(parentSeries.id, episode.id);
+                      }
+                    }}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {query && results.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>Không thấy kết quả phù hợp</Text>
+              <Text style={styles.emptyText}>Thử đổi từ khóa hoặc gửi tên truyện để mình bổ sung.</Text>
+            </View>
+          ) : null}
+
+          <RequestStoryCard
+            suggestedTitle={query.trim()}
+            title={query.trim() ? "Không thấy đúng truyện này?" : "Muốn nghe thêm truyện mới?"}
+            body={query.trim() ? "Gửi luôn tên truyện bạn đang tìm." : "Gửi tên truyện để mình bổ sung sau."}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -123,6 +140,9 @@ const styles = StyleSheet.create({
   safeArea: {
     backgroundColor: theme.colors.background,
     flex: 1
+  },
+  keyboardContainer: {
+    flex: 1,
   },
   content: {
     gap: theme.spacing.lg,

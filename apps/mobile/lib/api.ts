@@ -44,3 +44,19 @@ export async function fetchJson<T>(path: string) {
 
   return (await response.json()) as T;
 }
+
+export async function postJson<T>(path: string, body: unknown) {
+  const baseUrl = getApiBaseUrl();
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(errorBody?.error ?? `Request failed: ${response.status} (${baseUrl}${path})`);
+  }
+
+  return (await response.json()) as T;
+}
