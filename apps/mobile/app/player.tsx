@@ -258,6 +258,8 @@ export default function PlayerScreen() {
       episodeTitle: currentEpisode.title,
       currentTime: status.currentTime,
       savedAt: Date.now(),
+    }, {
+      seriesTitle: baseSeries.title,
     });
   }, [baseSeries, currentEpisode, playbackTick, status.currentTime, status.playing]);
 

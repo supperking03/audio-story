@@ -34,9 +34,14 @@ export default function HomeScreen() {
           />
         }
       >
-        <View style={styles.heroHeader}>
-          <Text style={styles.appName}>BuBu</Text>
-          <Text style={styles.appSub}>Nghe truyện ngôn tình & trinh thám</Text>
+        <View style={styles.heroHeaderRow}>
+          <View style={styles.heroHeader}>
+            <Text style={styles.appName}>BuBu</Text>
+            <Text style={styles.appSub}>Nghe truyện ngôn tình & trinh thám</Text>
+          </View>
+          <Pressable onPress={() => router.push("/history" as never)} style={styles.historyButton}>
+            <Feather color={theme.colors.text} name="clock" size={18} />
+          </Pressable>
         </View>
 
         <View style={styles.searchSection}>
@@ -99,6 +104,22 @@ const styles = StyleSheet.create({
   heroHeader: {
     gap: 4,
     marginTop: 8
+  },
+  heroHeaderRow: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  historyButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.line,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: "center",
+    marginTop: 12,
+    width: 40
   },
   appName: {
     color: theme.colors.accent,

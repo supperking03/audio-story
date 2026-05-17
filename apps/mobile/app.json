@@ -3,7 +3,7 @@
     "name": "BuBu: Truyện Audio",
     "slug": "bubu-truyen-audio",
     "scheme": "audiostory",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "icon": "./assets/icon.png",
@@ -34,7 +34,7 @@
     "extra": {},
     "ios": {
       "bundleIdentifier": "com.supperking03.audio-story",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "UIBackgroundModes": ["audio"]
       }
