@@ -9,7 +9,6 @@ import { LoadingIndicator } from "../components/loading-indicator";
 import { RequestStoryCard } from "../components/request-story-card";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
-import { browseTerms } from "../constants/mock-data";
 import { theme } from "../constants/theme";
 import { searchSeries } from "../data/story-service";
 import { useResponsive } from "../hooks/use-responsive";
@@ -17,9 +16,34 @@ import { useStories } from "../hooks/use-stories";
 
 export default function SearchScreen() {
   const params = useLocalSearchParams<{ query?: string }>();
-  const [query, setQuery] = useState(params.query ?? "");
+  const initialQuery = params.query ?? "";
+  const [query, setQuery] = useState(initialQuery);
   const { stories, isLoading, error } = useStories();
   const { isTablet, hPad } = useResponsive();
+  const filterTags = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const story of stories) {
+      for (const tag of story.tags) {
+        const normalized = tag.trim();
+        if (!normalized) {
+          continue;
+        }
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+      }
+    }
+
+    return [...counts.entries()]
+      .sort((a, b) => {
+        const countDiff = b[1] - a[1];
+        if (countDiff !== 0) {
+          return countDiff;
+        }
+        return a[0].localeCompare(b[0], "vi");
+      })
+      .slice(0, 10)
+      .map(([tag]) => tag);
+  }, [stories]);
 
   const results = useMemo(() => searchSeries(stories, query), [query, stories]);
   const episodeResults = useMemo(() => {
@@ -66,7 +90,7 @@ export default function SearchScreen() {
           <View style={styles.searchBox}>
             <Feather color={theme.colors.textMuted} name="search" size={18} />
             <TextInput
-              autoFocus
+              autoFocus={!initialQuery.trim()}
               onChangeText={setQuery}
               placeholder="Tên truyện, tác giả, mood..."
               placeholderTextColor={theme.colors.textMuted}
@@ -76,7 +100,7 @@ export default function SearchScreen() {
           </View>
 
           <View style={styles.chips}>
-            {browseTerms.map((term) => (
+            {filterTags.map((term) => (
               <Pressable key={term} onPress={() => setQuery(term)} style={styles.chip}>
                 <Text style={styles.chipText}>{term}</Text>
               </Pressable>
@@ -87,10 +111,16 @@ export default function SearchScreen() {
             <SectionHeader title={query ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
             {isLoading ? <LoadingIndicator label="Đang tải truyện..." /> : null}
             {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
-            <View style={[styles.resultList, isTablet && styles.resultListTablet]}>
+            <View style={styles.storyList}>
               {results.map((series) => (
-                <View key={series.id} style={isTablet ? styles.resultGridItem : null}>
-                  <StoryCard compact onPress={() => openSeries(series.id)} series={series} />
+                <View
+                  key={series.id}
+                  style={[
+                    styles.storyGridItem,
+                    isTablet ? styles.storyGridItemTablet : styles.storyGridItemPhone,
+                  ]}
+                >
+                  <StoryCard compact onPress={() => openSeries(series.id)} promotedTags={filterTags} series={series} />
                 </View>
               ))}
             </View>
@@ -115,13 +145,6 @@ export default function SearchScreen() {
                   />
                 ))}
               </View>
-            </View>
-          ) : null}
-
-          {query && results.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Không thấy kết quả phù hợp</Text>
-              <Text style={styles.emptyText}>Thử đổi từ khóa hoặc gửi tên truyện để mình bổ sung.</Text>
             </View>
           ) : null}
 
@@ -202,35 +225,23 @@ const styles = StyleSheet.create({
   section: {
     gap: 14
   },
-  resultList: {
-    gap: 14
-  },
-  resultListTablet: {
+  storyList: {
     flexDirection: "row",
-    flexWrap: "wrap"
+    flexWrap: "wrap",
+    gap: 12,
+    width: "100%"
   },
-  resultGridItem: {
-    width: "49%"
+  storyGridItem: {
+    marginBottom: 2
+  },
+  storyGridItemPhone: {
+    width: "48%"
+  },
+  storyGridItemTablet: {
+    width: "31.8%"
   },
   episodeList: {
     gap: 12
-  },
-  emptyState: {
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.line,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    gap: 6,
-    padding: theme.spacing.lg
-  },
-  emptyTitle: {
-    color: theme.colors.text,
-    fontSize: 18,
-    fontWeight: "700"
-  },
-  emptyText: {
-    color: theme.colors.textMuted,
-    fontSize: 14
   },
   helperText: {
     color: theme.colors.textMuted,

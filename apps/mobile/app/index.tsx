@@ -1,5 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useMemo } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -7,7 +8,6 @@ import { LoadingIndicator } from "../components/loading-indicator";
 import { RequestStoryCard } from "../components/request-story-card";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
-import { browseTerms } from "../constants/mock-data";
 import { theme } from "../constants/theme";
 import { useResponsive } from "../hooks/use-responsive";
 import { useStories } from "../hooks/use-stories";
@@ -15,6 +15,30 @@ import { useStories } from "../hooks/use-stories";
 export default function HomeScreen() {
   const { stories, isLoading, isRefreshing, error, refresh } = useStories();
   const { isTablet, hPad } = useResponsive();
+  const filterTags = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    for (const story of stories) {
+      for (const tag of story.tags) {
+        const normalized = tag.trim();
+        if (!normalized) {
+          continue;
+        }
+        counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+      }
+    }
+
+    return [...counts.entries()]
+      .sort((a, b) => {
+        const countDiff = b[1] - a[1];
+        if (countDiff !== 0) {
+          return countDiff;
+        }
+        return a[0].localeCompare(b[0], "vi");
+      })
+      .slice(0, 10)
+      .map(([tag]) => tag);
+  }, [stories]);
 
   const openSeries = (seriesId: string) => {
     router.push({ pathname: "/series/[id]", params: { id: seriesId } });
@@ -50,7 +74,7 @@ export default function HomeScreen() {
             <Text style={styles.placeholder}>Tên truyện, tác giả, mood...</Text>
           </Pressable>
           <View style={styles.filterRow}>
-            {browseTerms.slice(0, 5).map((term) => (
+            {filterTags.map((term) => (
               <Pressable
                 key={term}
                 onPress={() => router.push({ pathname: "/search", params: { query: term } })}
@@ -69,10 +93,16 @@ export default function HomeScreen() {
           {!isLoading && !error && stories.length === 0 ? (
             <Text style={styles.helperText}>API đang chạy nhưng chưa có truyện nào.</Text>
           ) : null}
-          <View style={[styles.storyList, isTablet && styles.storyListTablet]}>
+          <View style={styles.storyList}>
             {stories.map((series) => (
-              <View key={series.id} style={isTablet ? styles.storyGridItem : null}>
-                <StoryCard compact onPress={() => openSeries(series.id)} series={series} />
+              <View
+                key={series.id}
+                style={[
+                  styles.storyGridItem,
+                  isTablet ? styles.storyGridItemTablet : styles.storyGridItemPhone,
+                ]}
+              >
+                <StoryCard compact onPress={() => openSeries(series.id)} promotedTags={filterTags} series={series} />
               </View>
             ))}
           </View>
@@ -90,20 +120,13 @@ const styles = StyleSheet.create({
     flex: 1
   },
   content: {
-    gap: theme.spacing.xl,
-    padding: theme.spacing.lg,
+    gap: theme.spacing.lg,
+    padding: theme.spacing.md,
     paddingBottom: 140
-  },
-  storyListTablet: {
-    flexDirection: "row",
-    flexWrap: "wrap"
-  },
-  storyGridItem: {
-    width: "49%"
   },
   heroHeader: {
     gap: 4,
-    marginTop: 8
+    marginTop: 4
   },
   heroHeaderRow: {
     alignItems: "flex-start",
@@ -134,7 +157,7 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   searchSection: {
-    gap: 14
+    gap: 12
   },
   searchBox: {
     alignItems: "center",
@@ -150,7 +173,9 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10
+    gap: 10,
+    maxHeight: 78,
+    overflow: "hidden"
   },
   placeholder: {
     color: theme.colors.textMuted,
@@ -169,11 +194,22 @@ const styles = StyleSheet.create({
     fontWeight: "700"
   },
   section: {
-    gap: 14
+    gap: 12
   },
   storyList: {
-    gap: theme.spacing.md,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
     width: "100%"
+  },
+  storyGridItem: {
+    marginBottom: 2
+  },
+  storyGridItemPhone: {
+    width: "48%"
+  },
+  storyGridItemTablet: {
+    width: "31.8%"
   },
   helperText: {
     color: theme.colors.textMuted,

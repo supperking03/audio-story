@@ -1,5 +1,5 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { ImageBackground, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { StorySeries } from "../data/story-service";
 import { theme } from "../constants/theme";
@@ -8,62 +8,88 @@ type StoryCardProps = {
   series: StorySeries;
   compact?: boolean;
   onPress?: () => void;
+  promotedTags?: string[];
 };
 
-export function StoryCard({ series, compact = false, onPress }: StoryCardProps) {
-  const metaParts = [series.author, series.tags[0]].filter(Boolean);
+function selectDisplayTags(seriesTags: string[], promotedTags: string[] = []) {
+  const normalizedPromoted = promotedTags.map((tag) => tag.trim()).filter(Boolean);
+  const uniqueSeriesTags = Array.from(new Set(seriesTags.map((tag) => tag.trim()).filter(Boolean)));
+
+  const prioritized = normalizedPromoted.filter((tag) => uniqueSeriesTags.includes(tag));
+  const fallback = uniqueSeriesTags.filter((tag) => !prioritized.includes(tag));
+
+  return [...prioritized, ...fallback].slice(0, 2);
+}
+
+export function StoryCard({ series, compact = false, onPress, promotedTags = [] }: StoryCardProps) {
+  const displayTags = selectDisplayTags(series.tags, promotedTags);
+  const content = (
+    <>
+      <View style={styles.content}>
+        <Text numberOfLines={1} style={styles.mood}>{series.mood}</Text>
+        <Text numberOfLines={compact ? 2 : 3} style={[styles.title, compact && styles.compactTitle]}>
+          {series.title}
+        </Text>
+        <View style={styles.metaRow}>
+          {displayTags.map((part, index) => (
+            <View key={`${series.id}-meta-${part}-${index}`} style={styles.metaItem}>
+              {index > 0 ? <Text style={styles.dot}>•</Text> : null}
+              <Text numberOfLines={1} style={styles.tagText}>{part}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    </>
+  );
 
   return (
-    <Pressable onPress={onPress}>
-      <LinearGradient colors={series.coverColor} style={[styles.card, compact && styles.compactCard]}>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{series.latestEpisodeLabel}</Text>
-        </View>
-        <View style={styles.content}>
-          <Text style={styles.mood}>{series.mood}</Text>
-          <Text style={styles.title}>{series.title}</Text>
-          <View style={styles.metaRow}>
-            {metaParts.map((part, index) => (
-              <View key={`${series.id}-meta-${part}-${index}`} style={styles.metaItem}>
-                {index > 0 ? <Text style={styles.dot}>•</Text> : null}
-                <Text style={styles.author}>{part}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </LinearGradient>
+    <Pressable onPress={onPress} style={styles.pressable}>
+      {series.coverImageUrl ? (
+        <ImageBackground
+          imageStyle={styles.coverImage}
+          resizeMode="cover"
+          source={{ uri: series.coverImageUrl }}
+          style={[styles.card, compact && styles.compactCard]}
+        >
+          <LinearGradient colors={["rgba(9,11,18,0.08)", "rgba(9,11,18,0.42)", "rgba(9,11,18,0.92)"]} style={styles.overlay}>
+            {content}
+          </LinearGradient>
+        </ImageBackground>
+      ) : (
+        <LinearGradient colors={series.coverColor} style={[styles.card, compact && styles.compactCard]}>
+          {content}
+        </LinearGradient>
+      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: theme.radius.lg,
-    minHeight: 220,
-    overflow: "hidden",
-    padding: theme.spacing.lg,
-    width: 280
-  },
-  compactCard: {
-    minHeight: 180,
+  pressable: {
     width: "100%"
   },
-  badge: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(10, 11, 17, 0.35)",
-    borderRadius: theme.radius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 8
+  card: {
+    borderRadius: theme.radius.lg,
+    overflow: "hidden",
+    width: "100%",
+    aspectRatio: 0.74
   },
-  badgeText: {
-    color: theme.colors.text,
-    fontSize: 12,
-    fontWeight: "700"
+  compactCard: {
+    aspectRatio: 0.72
+  },
+  coverImage: {
+    borderRadius: theme.radius.lg,
+    transform: [{ scale: 1.18 }]
+  },
+  overlay: {
+    flex: 1,
+    justifyContent: "space-between",
+    padding: theme.spacing.md
   },
   content: {
     flex: 1,
     justifyContent: "flex-end",
-    gap: 6
+    gap: 5
   },
   mood: {
     color: "rgba(255,255,255,0.8)",
@@ -74,12 +100,17 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#FFFFFF",
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: "800"
+  },
+  compactTitle: {
+    fontSize: 18,
+    lineHeight: 24
   },
   metaRow: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 6
   },
   metaItem: {
@@ -87,10 +118,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 6
   },
-  author: {
+  tagText: {
     color: "rgba(255,255,255,0.75)",
-    fontSize: 13,
-    fontWeight: "600"
+    fontSize: 11,
+    fontWeight: "600",
+    maxWidth: 140
   },
   dot: {
     color: "rgba(255,255,255,0.55)",

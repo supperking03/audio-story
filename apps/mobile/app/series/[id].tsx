@@ -57,7 +57,7 @@ export default function SeriesDetailScreen() {
     );
   }
 
-  const latestEpisode = series.episodes[series.episodes.length - 1];
+  const firstEpisode = series.episodes[0];
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
@@ -130,18 +130,20 @@ export default function SeriesDetailScreen() {
           </View>
         </Modal>
 
-        <Pressable
-          onPress={() =>
-            router.push({
-              pathname: "/player",
-              params: { seriesId: series.id, episodeId: latestEpisode.id }
-            })
-          }
-          style={styles.primaryAction}
-        >
-          <Feather color="#11131C" name="play" size={18} />
-          <Text style={styles.primaryActionText}>Nghe từ tập mới nhất</Text>
-        </Pressable>
+        {firstEpisode ? (
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/player",
+                params: { seriesId: series.id, episodeId: firstEpisode.id }
+              })
+            }
+            style={styles.primaryAction}
+          >
+            <Feather color="#11131C" name="play" size={18} />
+            <Text style={styles.primaryActionText}>Nghe từ đầu</Text>
+          </Pressable>
+        ) : null}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Tất cả tập</Text>
