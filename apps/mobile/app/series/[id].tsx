@@ -1,15 +1,16 @@
 import { Feather } from "@expo/vector-icons";
+import { BottomSheetBackdrop, BottomSheetFlatList, BottomSheetModal } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { EpisodeRow } from "../../components/episode-row";
 import { LoadingIndicator } from "../../components/loading-indicator";
 import { theme } from "../../constants/theme";
 import { useResponsive } from "../../hooks/use-responsive";
 import { useStory } from "../../hooks/use-story";
+import { loadStoryEpisodes, type Episode } from "../../data/story-service";
 import { type SavedProgress, loadProgress } from "../../lib/playback-store";
 
 function formatClock(seconds: number) {
@@ -25,6 +26,35 @@ export default function SeriesDetailScreen() {
   const { isTablet, hPad } = useResponsive();
   const [savedProgress, setSavedProgress] = useState<SavedProgress | null>(null);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+
+  const [episodes, setEpisodes] = useState<Episode[]>([]);
+  const [totalEpisodes, setTotalEpisodes] = useState(0);
+  const [isLoadingMoreEpisodes, setIsLoadingMoreEpisodes] = useState(false);
+  const isLoadingMoreEpisodesRef = useRef(false);
+  const episodeSheetRef = useRef<BottomSheetModal>(null);
+
+  useEffect(() => {
+    if (!params.id) return;
+    loadStoryEpisodes(params.id, 0, 50).then(({ episodes: eps, total }) => {
+      setEpisodes(eps);
+      setTotalEpisodes(total);
+    }).catch(() => {});
+  }, [params.id]);
+
+  const loadMoreEpisodes = useCallback(() => {
+    if (!params.id || isLoadingMoreEpisodesRef.current || episodes.length >= totalEpisodes) return;
+    isLoadingMoreEpisodesRef.current = true;
+    setIsLoadingMoreEpisodes(true);
+    loadStoryEpisodes(params.id, episodes.length, 50)
+      .then(({ episodes: more }) => {
+        setEpisodes((prev) => [...prev, ...more]);
+      })
+      .catch(() => {})
+      .finally(() => {
+        isLoadingMoreEpisodesRef.current = false;
+        setIsLoadingMoreEpisodes(false);
+      });
+  }, [params.id, episodes.length, totalEpisodes]);
 
   useEffect(() => {
     if (!params.id) return;
@@ -57,11 +87,47 @@ export default function SeriesDetailScreen() {
     );
   }
 
-  const firstEpisode = series.episodes[0];
+  const firstEpisode = episodes[0] ?? series?.episodes[0];
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={[styles.content, isTablet && { paddingHorizontal: hPad }]}>
+      <Modal
+        animationType="fade"
+        transparent
+        visible={!!savedProgress && episodes.some((ep) => ep.id === savedProgress?.episodeId)}
+        onRequestClose={() => setSavedProgress(null)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setSavedProgress(null)} />
+        <View style={styles.resumeSheet}>
+          <View style={styles.resumeSheetHandle} />
+          <Text style={styles.resumeSheetTitle}>Nghe tiếp?</Text>
+          <Text style={styles.resumeSheetBody} numberOfLines={2}>
+            Lần trước bạn đang nghe{"\n"}
+            <Text style={styles.resumeSheetHighlight}>
+              {savedProgress?.episodeTitle} • {formatClock(savedProgress?.currentTime ?? 0)}
+            </Text>
+          </Text>
+          <View style={styles.resumeSheetActions}>
+            <Pressable style={styles.resumeSheetDismiss} onPress={() => setSavedProgress(null)}>
+              <Text style={styles.resumeSheetDismissText}>Bỏ qua</Text>
+            </Pressable>
+            <Pressable
+              style={styles.resumeSheetConfirm}
+              onPress={() => {
+                setSavedProgress(null);
+                router.push({ pathname: "/player", params: { seriesId: series.id, episodeId: savedProgress!.episodeId, resumeTime: String(Math.floor(savedProgress!.currentTime)) } });
+              }}
+            >
+              <Feather color="#11131C" name="play" size={16} />
+              <Text style={styles.resumeSheetConfirmText}>Nghe tiếp</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <ScrollView
+        contentContainerStyle={[styles.content, isTablet && { paddingHorizontal: hPad }]}
+      >
         <View style={styles.header}>
           <Pressable onPress={() => router.back()} style={styles.backButton}>
             <Feather color={theme.colors.text} name="arrow-left" size={18} />
@@ -83,87 +149,83 @@ export default function SeriesDetailScreen() {
               {series.description}
             </Text>
             {series.description.length > 140 ? (
-              <Pressable onPress={() => setIsDescriptionExpanded((value) => !value)} style={styles.expandButton}>
+              <Pressable onPress={() => setIsDescriptionExpanded((v) => !v)} style={styles.expandButton}>
                 <Text style={styles.expandButtonText}>{isDescriptionExpanded ? "Thu gọn" : "Xem thêm"}</Text>
               </Pressable>
             ) : null}
           </View>
         ) : null}
 
-        <Modal
-          animationType="fade"
-          transparent
-          visible={!!savedProgress && series.episodes.some((ep) => ep.id === savedProgress?.episodeId)}
-          onRequestClose={() => setSavedProgress(null)}
-        >
-          <Pressable style={styles.modalBackdrop} onPress={() => setSavedProgress(null)} />
-          <View style={styles.resumeSheet}>
-            <View style={styles.resumeSheetHandle} />
-            <Text style={styles.resumeSheetTitle}>Nghe tiếp?</Text>
-            <Text style={styles.resumeSheetBody} numberOfLines={2}>
-              Lần trước bạn đang nghe{"\n"}
-              <Text style={styles.resumeSheetHighlight}>
-                {savedProgress?.episodeTitle} • {formatClock(savedProgress?.currentTime ?? 0)}
-              </Text>
-            </Text>
-            <View style={styles.resumeSheetActions}>
-              <Pressable
-                style={styles.resumeSheetDismiss}
-                onPress={() => setSavedProgress(null)}
-              >
-                <Text style={styles.resumeSheetDismissText}>Bỏ qua</Text>
-              </Pressable>
-              <Pressable
-                style={styles.resumeSheetConfirm}
-                onPress={() => {
-                  setSavedProgress(null);
-                  router.push({
-                    pathname: "/player",
-                    params: { seriesId: series.id, episodeId: savedProgress!.episodeId, resumeTime: String(Math.floor(savedProgress!.currentTime)) }
-                  });
-                }}
-              >
-                <Feather color="#11131C" name="play" size={16} />
-                <Text style={styles.resumeSheetConfirmText}>Nghe tiếp</Text>
-              </Pressable>
-            </View>
-          </View>
-        </Modal>
+        <View style={styles.actionRow}>
+          {firstEpisode ? (
+            <Pressable
+              onPress={() => router.push({ pathname: "/player", params: { seriesId: series.id, episodeId: firstEpisode.id } })}
+              style={styles.primaryAction}
+            >
+              <Feather color="#11131C" name="play" size={18} />
+              <Text style={styles.primaryActionText}>Nghe từ đầu</Text>
+            </Pressable>
+          ) : null}
 
-        {firstEpisode ? (
           <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/player",
-                params: { seriesId: series.id, episodeId: firstEpisode.id }
-              })
-            }
-            style={styles.primaryAction}
+            onPress={() => episodeSheetRef.current?.present()}
+            style={styles.episodeListButton}
           >
-            <Feather color="#11131C" name="play" size={18} />
-            <Text style={styles.primaryActionText}>Nghe từ đầu</Text>
+            <Feather color={theme.colors.text} name="list" size={18} />
+            <Text style={styles.episodeListButtonText}>
+              {totalEpisodes > 0 ? `${totalEpisodes} tập` : "Danh sách tập"}
+            </Text>
+            <Feather color={theme.colors.textMuted} name="chevron-right" size={16} style={styles.episodeListChevron} />
           </Pressable>
-        ) : null}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Tất cả tập</Text>
-          <View style={styles.episodeList}>
-            {series.episodes.map((episode, index) => (
-              <EpisodeRow
-                key={episode.id}
-                episode={episode}
-                highlighted={index === series.episodes.length - 1}
-                onPress={() =>
-                  router.push({
-                    pathname: "/player",
-                    params: { seriesId: series.id, episodeId: episode.id }
-                  })
-                }
-              />
-            ))}
-          </View>
         </View>
       </ScrollView>
+
+      <BottomSheetModal
+        ref={episodeSheetRef}
+        snapPoints={["75%"]}
+        enablePanDownToClose
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
+        )}
+        backgroundStyle={styles.sheetBackground}
+        handleIndicatorStyle={styles.sheetHandleIndicator}
+      >
+        <View style={styles.sheetHeader}>
+          <Text style={styles.sheetTitle}>Danh sách tập</Text>
+          {totalEpisodes > 0 ? <Text style={styles.sheetEpisodeCount}>{totalEpisodes} tập</Text> : null}
+        </View>
+        <BottomSheetFlatList
+          data={episodes}
+          keyExtractor={(ep) => ep.id}
+          contentContainerStyle={styles.sheetList}
+          onEndReached={loadMoreEpisodes}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={
+            isLoadingMoreEpisodes ? (
+              <ActivityIndicator color={theme.colors.accent} size="small" style={styles.loadingMore} />
+            ) : null
+          }
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          renderItem={({ item: episode, index }) => (
+            <Pressable
+              style={styles.sheetRow}
+              onPress={() => {
+                episodeSheetRef.current?.dismiss();
+                router.push({ pathname: "/player", params: { seriesId: series.id, episodeId: episode.id } });
+              }}
+            >
+              <View style={styles.sheetEpNumber}>
+                <Text style={styles.sheetEpNumberText}>{index + 1}</Text>
+              </View>
+              <View style={styles.sheetCopy}>
+                <Text style={styles.sheetEpTitle} numberOfLines={2}>{episode.title}</Text>
+                <Text style={styles.sheetEpMeta}>{episode.durationLabel} • {episode.publishedAt}</Text>
+              </View>
+              <Feather color={theme.colors.textMuted} name="chevron-right" size={16} />
+            </Pressable>
+          )}
+        />
+      </BottomSheetModal>
     </SafeAreaView>
   );
 }
@@ -176,7 +238,7 @@ const styles = StyleSheet.create({
   content: {
     gap: theme.spacing.lg,
     padding: theme.spacing.lg,
-    paddingBottom: 120
+    paddingBottom: 48
   },
   header: {
     alignItems: "center",
@@ -220,6 +282,60 @@ const styles = StyleSheet.create({
   heroMeta: {
     color: "rgba(255,255,255,0.82)",
     fontSize: 14
+  },
+  description: {
+    color: theme.colors.textMuted,
+    fontSize: 15,
+    lineHeight: 22
+  },
+  descriptionBlock: {
+    gap: 10
+  },
+  expandButton: {
+    alignSelf: "flex-start"
+  },
+  expandButtonText: {
+    color: theme.colors.accent,
+    fontSize: 14,
+    fontWeight: "700"
+  },
+  actionRow: {
+    gap: 12
+  },
+  primaryAction: {
+    alignItems: "center",
+    backgroundColor: theme.colors.warning,
+    borderRadius: theme.radius.pill,
+    flexDirection: "row",
+    gap: 10,
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 14
+  },
+  primaryActionText: {
+    color: "#11131C",
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  episodeListButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.line,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 12,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: 16
+  },
+  episodeListButtonText: {
+    color: theme.colors.text,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "700"
+  },
+  episodeListChevron: {
+    marginLeft: "auto"
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
@@ -291,47 +407,72 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "800"
   },
-  primaryAction: {
+  sheetBackground: {
+    backgroundColor: theme.colors.surface
+  },
+  sheetHandleIndicator: {
+    backgroundColor: theme.colors.line,
+    width: 40
+  },
+  sheetHeader: {
     alignItems: "center",
-    backgroundColor: theme.colors.warning,
-    borderRadius: theme.radius.pill,
     flexDirection: "row",
-    gap: 10,
-    justifyContent: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 14
+    justifyContent: "space-between",
+    paddingBottom: 12,
+    paddingHorizontal: theme.spacing.lg
   },
-  primaryActionText: {
-    color: "#11131C",
-    fontSize: 15,
-    fontWeight: "800"
+  sheetTitle: {
+    color: theme.colors.text,
+    fontSize: 17,
+    fontWeight: "700"
   },
-  description: {
+  sheetEpisodeCount: {
     color: theme.colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22
+    fontSize: 13
   },
-  descriptionBlock: {
-    gap: 10
+  sheetList: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: 32
   },
-  expandButton: {
-    alignSelf: "flex-start"
+  sheetRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 12,
+    paddingVertical: 12
   },
-  expandButtonText: {
-    color: theme.colors.accent,
+  sheetEpNumber: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surfaceElevated,
+    borderRadius: theme.radius.pill,
+    height: 36,
+    justifyContent: "center",
+    width: 36
+  },
+  sheetEpNumberText: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  sheetCopy: {
+    flex: 1,
+    gap: 3
+  },
+  sheetEpTitle: {
+    color: theme.colors.text,
     fontSize: 14,
     fontWeight: "700"
   },
-  section: {
-    gap: 12
+  sheetEpMeta: {
+    color: theme.colors.textMuted,
+    fontSize: 12
   },
-  sectionTitle: {
-    color: theme.colors.text,
-    fontSize: 20,
-    fontWeight: "700"
+  separator: {
+    backgroundColor: theme.colors.line,
+    height: StyleSheet.hairlineWidth
   },
-  episodeList: {
-    gap: 12
+  loadingMore: {
+    alignSelf: "center",
+    paddingVertical: 16
   },
   missingState: {
     alignItems: "center",

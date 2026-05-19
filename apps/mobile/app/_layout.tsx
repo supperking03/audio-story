@@ -1,8 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { router, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AudioSessionManager } from "../components/audio-session-manager";
 import { MiniPlayer } from "../components/mini-player";
@@ -16,19 +18,21 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <PlayerMetaProvider>
-      <StatusBar style="light" />
-      <View style={styles.root}>
-        <AudioSessionManager />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: "#0A0B11" }
-          }}
-        />
-        <MiniPlayer />
-      </View>
-    </PlayerMetaProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <BottomSheetModalProvider>
+        <PlayerMetaProvider>
+          <StatusBar style="light" />
+          <AudioSessionManager />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: "#0A0B11" }
+            }}
+          />
+          <MiniPlayer />
+        </PlayerMetaProvider>
+      </BottomSheetModalProvider>
+    </GestureHandlerRootView>
   );
 }
 

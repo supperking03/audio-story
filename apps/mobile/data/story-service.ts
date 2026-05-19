@@ -38,7 +38,7 @@ type ApiEpisode = {
   audioUrl: string | null;
   durationSec: number | null;
   publishedAt: string | null;
-  transcriptText: string | null;
+  transcriptText?: string | null;
 };
 
 type ApiEpisodePreview = {
@@ -58,6 +58,7 @@ type ApiStory = {
   status: "DRAFT" | "ONGOING" | "COMPLETED" | "ARCHIVED";
   metadata: { mood?: string } | null;
   episodes: ApiEpisode[];
+  totalEpisodes?: number;
 };
 
 type ApiStoryPreview = {
@@ -132,7 +133,7 @@ function mapEpisode(episode: ApiEpisode): Episode {
     publishedAt: formatPublishedAt(episode.publishedAt),
     summary: episode.summary ?? "",
     audioUrl: episode.audioUrl,
-    transcriptText: episode.transcriptText
+    transcriptText: episode.transcriptText ?? null
   };
 }
 
@@ -201,14 +202,19 @@ function mapPreviewStory(story: ApiStoryPreview): StorySeries {
   };
 }
 
-export async function loadStories() {
-  const data = await fetchJson<{ stories: ApiStoryPreview[] }>("/api/mobile/stories");
-  return data.stories.map(mapPreviewStory);
+export async function loadStories(skip = 0, take = 20): Promise<{ stories: StorySeries[]; total: number }> {
+  const data = await fetchJson<{ stories: ApiStoryPreview[]; total: number }>(`/api/mobile/stories?take=${take}&skip=${skip}`);
+  return { stories: data.stories.map(mapPreviewStory), total: data.total };
 }
 
 export async function loadStoryById(id: string) {
   const data = await fetchJson<{ story: ApiStory }>(`/api/mobile/stories/${id}`);
   return mapStory(data.story);
+}
+
+export async function loadStoryEpisodes(storyId: string, skip = 0, take = 50): Promise<{ episodes: Episode[]; total: number }> {
+  const data = await fetchJson<{ story: { episodes: ApiEpisode[]; totalEpisodes: number } }>(`/api/mobile/stories/${storyId}?episodesSkip=${skip}&episodesTake=${take}`);
+  return { episodes: data.story.episodes.map(mapEpisode), total: data.story.totalEpisodes };
 }
 
 export async function loadEpisodeById(id: string) {

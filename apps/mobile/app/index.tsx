@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingIndicator } from "../components/loading-indicator";
@@ -9,11 +9,12 @@ import { RequestStoryCard } from "../components/request-story-card";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
 import { theme } from "../constants/theme";
+import { type StorySeries } from "../data/story-service";
 import { useResponsive } from "../hooks/use-responsive";
 import { useStories } from "../hooks/use-stories";
 
 export default function HomeScreen() {
-  const { stories, isLoading, isRefreshing, error, refresh } = useStories();
+  const { stories, total, isLoading, isRefreshing, isLoadingMore, error, refresh, loadMore } = useStories();
   const { isTablet, hPad } = useResponsive();
   const filterTags = useMemo(() => {
     const counts = new Map<string, number>();
@@ -44,72 +45,91 @@ export default function HomeScreen() {
     router.push({ pathname: "/series/[id]", params: { id: seriesId } });
   };
 
+  const ListHeader = (
+    <View style={{ gap: theme.spacing.lg }}>
+      <View style={styles.heroHeaderRow}>
+        <View style={styles.heroHeader}>
+          <Text style={styles.appName}>BuBu</Text>
+          <Text style={styles.appSub}>Nghe truyện ngôn tình & trinh thám</Text>
+        </View>
+        <Pressable onPress={() => router.push("/history" as never)} style={styles.historyButton}>
+          <Feather color={theme.colors.text} name="clock" size={18} />
+        </Pressable>
+      </View>
+
+      <View style={styles.searchSection}>
+        <Pressable onPress={() => router.push("/search")} style={styles.searchBox}>
+          <Feather color={theme.colors.textMuted} name="search" size={18} />
+          <Text style={styles.placeholder}>Tên truyện, tác giả, mood...</Text>
+        </Pressable>
+        <View style={styles.filterRow}>
+          {filterTags.map((term) => (
+            <Pressable
+              key={term}
+              onPress={() => router.push({ pathname: "/search", params: { query: term } })}
+              style={styles.filterChip}
+            >
+              <Text style={styles.filterText}>{term}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.sectionHeaderRow}>
+        <SectionHeader title="Tất cả truyện" />
+        {total > 0 ? <Text style={styles.totalLabel}>{total} truyện</Text> : null}
+      </View>
+      {isLoading ? <LoadingIndicator label="Đang tải danh sách truyện..." /> : null}
+      {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
+      {!isLoading && !error && stories.length === 0 ? (
+        <Text style={styles.helperText}>API đang chạy nhưng chưa có truyện nào.</Text>
+      ) : null}
+    </View>
+  );
+
+  const ListFooter = (
+    <View style={styles.footerSection}>
+      {isLoadingMore ? (
+        <ActivityIndicator color={theme.colors.accent} size="small" style={styles.loadingMoreIndicator} />
+      ) : null}
+      <RequestStoryCard />
+    </View>
+  );
+
+  const renderItem = ({ item: series }: { item: StorySeries }) => (
+    <View
+      style={[
+        styles.storyGridItem,
+        isTablet ? styles.storyGridItemTablet : styles.storyGridItemPhone,
+      ]}
+    >
+      <StoryCard compact onPress={() => openSeries(series.id)} promotedTags={filterTags} series={series} />
+    </View>
+  );
+
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      <ScrollView
+      <FlatList
+        data={isLoading ? [] : stories}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        numColumns={isTablet ? 3 : 2}
+        key={isTablet ? "tablet" : "phone"}
+        columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={[styles.content, { paddingHorizontal: hPad }]}
+        ListHeaderComponent={ListHeader}
+        ListHeaderComponentStyle={styles.listHeader}
+        ListFooterComponent={ListFooter}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.3}
         refreshControl={
           <RefreshControl
-            onRefresh={() => {
-              void refresh(true);
-            }}
+            onRefresh={refresh}
             refreshing={isRefreshing}
             tintColor={theme.colors.accent}
           />
         }
-      >
-        <View style={styles.heroHeaderRow}>
-          <View style={styles.heroHeader}>
-            <Text style={styles.appName}>BuBu</Text>
-            <Text style={styles.appSub}>Nghe truyện ngôn tình & trinh thám</Text>
-          </View>
-          <Pressable onPress={() => router.push("/history" as never)} style={styles.historyButton}>
-            <Feather color={theme.colors.text} name="clock" size={18} />
-          </Pressable>
-        </View>
-
-        <View style={styles.searchSection}>
-          <Pressable onPress={() => router.push("/search")} style={styles.searchBox}>
-            <Feather color={theme.colors.textMuted} name="search" size={18} />
-            <Text style={styles.placeholder}>Tên truyện, tác giả, mood...</Text>
-          </Pressable>
-          <View style={styles.filterRow}>
-            {filterTags.map((term) => (
-              <Pressable
-                key={term}
-                onPress={() => router.push({ pathname: "/search", params: { query: term } })}
-                style={styles.filterChip}
-              >
-                <Text style={styles.filterText}>{term}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <SectionHeader title="Tất cả truyện" />
-          {isLoading ? <LoadingIndicator label="Đang tải danh sách truyện..." /> : null}
-          {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
-          {!isLoading && !error && stories.length === 0 ? (
-            <Text style={styles.helperText}>API đang chạy nhưng chưa có truyện nào.</Text>
-          ) : null}
-          <View style={styles.storyList}>
-            {stories.map((series) => (
-              <View
-                key={series.id}
-                style={[
-                  styles.storyGridItem,
-                  isTablet ? styles.storyGridItemTablet : styles.storyGridItemPhone,
-                ]}
-              >
-                <StoryCard compact onPress={() => openSeries(series.id)} promotedTags={filterTags} series={series} />
-              </View>
-            ))}
-          </View>
-        </View>
-
-        <RequestStoryCard />
-      </ScrollView>
+      />
     </SafeAreaView>
   );
 }
@@ -123,6 +143,9 @@ const styles = StyleSheet.create({
     gap: theme.spacing.lg,
     padding: theme.spacing.md,
     paddingBottom: 140
+  },
+  listHeader: {
+    marginBottom: theme.spacing.md
   },
   heroHeader: {
     gap: 4,
@@ -193,23 +216,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700"
   },
-  section: {
+  sectionHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
+  totalLabel: {
+    color: theme.colors.textMuted,
+    fontSize: 13
+  },
+  columnWrapper: {
     gap: 12
   },
-  storyList: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    width: "100%"
-  },
   storyGridItem: {
+    flex: 1,
     marginBottom: 2
   },
   storyGridItemPhone: {
-    width: "48%"
+    maxWidth: "50%"
   },
   storyGridItemTablet: {
-    width: "31.8%"
+    maxWidth: "33.333%"
+  },
+  footerSection: {
+    gap: theme.spacing.lg,
+    marginTop: theme.spacing.md
+  },
+  loadingMoreIndicator: {
+    alignSelf: "center",
+    paddingVertical: 8
   },
   helperText: {
     color: theme.colors.textMuted,

@@ -1,15 +1,16 @@
 import { Feather } from "@expo/vector-icons";
+import { BottomSheetBackdrop, BottomSheetFlatList, BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Animated, FlatList, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Animated, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingIndicator } from "../components/loading-indicator";
 import { usePlayerMeta } from "../contexts/player-context";
 import { theme } from "../constants/theme";
-import { getFallbackNowPlaying, loadEpisodeById, type Episode } from "../data/story-service";
+import { getFallbackNowPlaying, loadEpisodeById, loadStoryEpisodes, type Episode } from "../data/story-service";
 import { useResponsive } from "../hooks/use-responsive";
 import { useSingletonPlayer } from "../hooks/use-singleton-player";
 import { useStory } from "../hooks/use-story";
@@ -70,12 +71,15 @@ export default function PlayerScreen() {
   const [showSleepTimerSheet, setShowSleepTimerSheet] = useState(false);
   const [sleepTimerKey, setSleepTimerKey] = useState<SleepTimerOptionKey>("off");
   const [sleepTimerEndsAt, setSleepTimerEndsAt] = useState<number | null>(null);
-  const [showEpisodes, setShowEpisodes] = useState(false);
-  const [showTranscript, setShowTranscript] = useState(false);
+  const episodeSheetRef = useRef<BottomSheetModal>(null);
+  const transcriptSheetRef = useRef<BottomSheetModal>(null);
   const [currentEpisodeId, setCurrentEpisodeId] = useState<string | null>(params.episodeId ?? null);
   const [isEpisodeSwitching, setIsEpisodeSwitching] = useState(false);
   const [episodeAssets, setEpisodeAssets] = useState<Record<string, Episode>>({});
   const [episodeAssetError, setEpisodeAssetError] = useState<string | null>(null);
+  const [loadedEpisodes, setLoadedEpisodes] = useState<Episode[]>([]);
+  const [totalEpisodes, setTotalEpisodes] = useState(0);
+  const [isLoadingMoreEpisodes, setIsLoadingMoreEpisodes] = useState(false);
   const { setMeta, remoteNextRef, remotePrevRef } = usePlayerMeta();
   const sleepTimerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -131,6 +135,14 @@ export default function PlayerScreen() {
   }, [params.episodeId]);
 
   useEffect(() => {
+    if (!seriesId) return;
+    loadStoryEpisodes(seriesId, 0, 50).then(({ episodes, total }) => {
+      setLoadedEpisodes(episodes);
+      setTotalEpisodes(total);
+    }).catch(() => {});
+  }, [seriesId]);
+
+  useEffect(() => {
     return () => {
       if (sleepTimerTimeoutRef.current) {
         clearTimeout(sleepTimerTimeoutRef.current);
@@ -142,7 +154,7 @@ export default function PlayerScreen() {
     hasResumedRef.current = false;
   }, [resumeEpisodeId, resumeTime]);
 
-  const orderedEpisodes = baseSeries?.episodes ?? [];
+  const orderedEpisodes = loadedEpisodes.length > 0 ? loadedEpisodes : (baseSeries?.episodes ?? []);
 
   useEffect(() => {
     if (currentEpisodeId || orderedEpisodes.length === 0) {
@@ -282,6 +294,24 @@ export default function PlayerScreen() {
   }, [baseSeries, currentEpisode, orderedEpisodes, player, sleepTimerKey, status.didJustFinish]);
 
   const episodeIndex = orderedEpisodes.findIndex((episode) => episode.id === currentEpisode?.id);
+
+  // Pre-load the next episode's audio URL while the current one is playing,
+  // so the transition is instant and the player never goes idle (which causes iOS to suspend the app).
+  const preloadedEpisodeIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const nextEpisode = orderedEpisodes[episodeIndex + 1];
+    if (!nextEpisode || episodeAssets[nextEpisode.id]?.audioUrl) return;
+    if (preloadedEpisodeIdsRef.current.has(nextEpisode.id)) return;
+    preloadedEpisodeIdsRef.current.add(nextEpisode.id);
+    loadEpisodeById(nextEpisode.id)
+      .then((episode) => {
+        setEpisodeAssets((prev) => ({ ...prev, [nextEpisode.id]: episode }));
+      })
+      .catch(() => {
+        preloadedEpisodeIdsRef.current.delete(nextEpisode.id);
+      });
+  }, [episodeIndex, orderedEpisodes, episodeAssets]);
+
   const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
   const sleepTimerLabel = useMemo(() => {
     const activeOption = SLEEP_TIMER_OPTIONS.find((option) => option.key === sleepTimerKey);
@@ -414,9 +444,20 @@ export default function PlayerScreen() {
     saveTickRef.current = -1;
     hasResumedRef.current = true;
     setIsEpisodeSwitching(true);
-    setShowTranscript(false);
+    transcriptSheetRef.current?.dismiss();
     setCurrentEpisodeId(nextEpisode.id);
   };
+
+  const loadMoreEpisodes = useCallback(() => {
+    if (isLoadingMoreEpisodes || loadedEpisodes.length >= totalEpisodes) return;
+    setIsLoadingMoreEpisodes(true);
+    loadStoryEpisodes(seriesId, loadedEpisodes.length, 50)
+      .then(({ episodes }) => {
+        setLoadedEpisodes((prev) => [...prev, ...episodes]);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoadingMoreEpisodes(false));
+  }, [isLoadingMoreEpisodes, loadedEpisodes.length, totalEpisodes, seriesId]);
 
   const togglePlayback = async () => {
     if (!hasAudio) return;
@@ -555,62 +596,15 @@ export default function PlayerScreen() {
         <View style={styles.utilityRow}>
           <UtilityTile
             label="Danh sách tập"
-            value={`${orderedEpisodes.length}`}
-            onPress={baseSeries ? () => setShowEpisodes(true) : undefined}
+            value={totalEpisodes > 0 ? String(totalEpisodes) : String(orderedEpisodes.length)}
+            onPress={baseSeries ? () => episodeSheetRef.current?.present() : undefined}
           />
           <UtilityTile
             label="Nội dung"
             value={currentEpisode?.transcriptText ? "Xem" : "—"}
-            onPress={currentEpisode?.transcriptText ? () => setShowTranscript(true) : undefined}
+            onPress={currentEpisode?.transcriptText ? () => transcriptSheetRef.current?.present() : undefined}
           />
         </View>
-
-        <Modal animationType="slide" transparent visible={showTranscript} onRequestClose={() => setShowTranscript(false)}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setShowTranscript(false)} />
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>{currentEpisode?.title ?? "Nội dung"}</Text>
-            <ScrollView contentContainerStyle={styles.transcriptContent}>
-              <Text style={styles.transcriptText}>{currentEpisode?.transcriptText}</Text>
-            </ScrollView>
-          </View>
-        </Modal>
-
-        <Modal animationType="slide" transparent visible={showEpisodes} onRequestClose={() => setShowEpisodes(false)}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setShowEpisodes(false)} />
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Danh sách tập</Text>
-            <FlatList
-              data={orderedEpisodes}
-              keyExtractor={(ep) => ep.id}
-              contentContainerStyle={styles.sheetList}
-              renderItem={({ item: ep }) => {
-                const isCurrent = ep.id === currentEpisode?.id;
-                return (
-                  <Pressable
-                    style={[styles.sheetRow, isCurrent && styles.sheetRowActive]}
-                    onPress={() => {
-                      setShowEpisodes(false);
-                      saveTickRef.current = -1;
-                      hasResumedRef.current = true;
-                      setIsEpisodeSwitching(true);
-                      setCurrentEpisodeId(ep.id);
-                    }}
-                  >
-                    <View style={[styles.sheetPlayIcon, isCurrent && styles.sheetPlayIconActive]}>
-                      <Feather color={isCurrent ? "#11131C" : theme.colors.text} name={isCurrent && status.playing ? "pause" : "play"} size={14} />
-                    </View>
-                    <View style={styles.sheetCopy}>
-                      <Text style={[styles.sheetEpTitle, isCurrent && styles.sheetEpTitleActive]}>{ep.title}</Text>
-                      <Text style={[styles.sheetEpMeta, isCurrent && styles.sheetEpMetaActive]}>{ep.durationLabel} • {ep.publishedAt}</Text>
-                    </View>
-                  </Pressable>
-                );
-              }}
-            />
-          </View>
-        </Modal>
 
         <Modal animationType="slide" transparent visible={showSpeedEditor} onRequestClose={() => setShowSpeedEditor(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setShowSpeedEditor(false)} />
@@ -675,6 +669,68 @@ export default function PlayerScreen() {
         </Modal>
       </ScrollView>
       </KeyboardAvoidingView>
+      <BottomSheetModal
+        ref={transcriptSheetRef}
+        snapPoints={["70%"]}
+        enablePanDownToClose
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
+        )}
+        backgroundStyle={styles.sheetBackground}
+        handleIndicatorStyle={styles.sheetHandleIndicator}
+      >
+        <Text style={styles.sheetTitle}>{currentEpisode?.title ?? "Nội dung"}</Text>
+        <BottomSheetScrollView contentContainerStyle={styles.transcriptContent}>
+          <Text style={styles.transcriptText}>{currentEpisode?.transcriptText}</Text>
+        </BottomSheetScrollView>
+      </BottomSheetModal>
+      <BottomSheetModal
+        ref={episodeSheetRef}
+        snapPoints={["70%"]}
+        enablePanDownToClose
+        backdropComponent={(props) => (
+          <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />
+        )}
+        backgroundStyle={styles.sheetBackground}
+        handleIndicatorStyle={styles.sheetHandleIndicator}
+      >
+        <Text style={styles.sheetTitle}>Danh sách tập</Text>
+        <BottomSheetFlatList
+          data={orderedEpisodes}
+          keyExtractor={(ep) => ep.id}
+          contentContainerStyle={styles.sheetList}
+          onEndReached={loadMoreEpisodes}
+          onEndReachedThreshold={0.3}
+          ListFooterComponent={
+            isLoadingMoreEpisodes ? (
+              <ActivityIndicator color={theme.colors.accent} size="small" style={styles.episodeLoadingMore} />
+            ) : null
+          }
+          renderItem={({ item: ep }) => {
+            const isCurrent = ep.id === currentEpisode?.id;
+            return (
+              <Pressable
+                style={[styles.sheetRow, isCurrent && styles.sheetRowActive]}
+                onPress={() => {
+                  episodeSheetRef.current?.dismiss();
+                  saveTickRef.current = -1;
+                  hasResumedRef.current = true;
+                  setIsEpisodeSwitching(true);
+                  setCurrentEpisodeId(ep.id);
+                }}
+              >
+                <View style={[styles.sheetPlayIcon, isCurrent && styles.sheetPlayIconActive]}>
+                  <Feather color={isCurrent ? "#11131C" : theme.colors.text} name={isCurrent && status.playing ? "pause" : "play"} size={14} />
+                </View>
+                <View style={styles.sheetCopy}>
+                  <Text style={[styles.sheetEpTitle, isCurrent && styles.sheetEpTitleActive]}>{ep.title}</Text>
+                  <Text style={[styles.sheetEpMeta, isCurrent && styles.sheetEpMetaActive]}>{ep.durationLabel} • {ep.publishedAt}</Text>
+                </View>
+              </Pressable>
+            );
+          }}
+        />
+      </BottomSheetModal>
     </SafeAreaView>
   );
 }
@@ -1007,8 +1063,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.line,
     borderRadius: theme.radius.pill,
     height: 4,
-    marginBottom: 16,
     width: 40
+  },
+  sheetBackground: {
+    backgroundColor: theme.colors.surface,
+  },
+  sheetHandleIndicator: {
+    backgroundColor: theme.colors.line,
+    width: 40,
   },
   sheetTitle: {
     color: theme.colors.text,
@@ -1087,6 +1149,10 @@ const styles = StyleSheet.create({
   },
   sheetEpMetaActive: {
     color: "rgba(17, 19, 28, 0.6)"
+  },
+  episodeLoadingMore: {
+    alignSelf: "center",
+    paddingVertical: 12
   },
   transcriptContent: {
     paddingHorizontal: theme.spacing.lg,
