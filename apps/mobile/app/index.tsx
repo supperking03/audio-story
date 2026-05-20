@@ -1,10 +1,11 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingIndicator } from "../components/loading-indicator";
+import { NotificationSettingsSheet } from "../components/notification-settings-sheet";
 import { RequestStoryCard } from "../components/request-story-card";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
@@ -16,6 +17,7 @@ import { useStories } from "../hooks/use-stories";
 export default function HomeScreen() {
   const { stories, total, isLoading, isRefreshing, isLoadingMore, error, refresh, loadMore } = useStories();
   const { isTablet, hPad } = useResponsive();
+  const [showNotifSettings, setShowNotifSettings] = useState(false);
   const filterTags = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -52,9 +54,14 @@ export default function HomeScreen() {
           <Text style={styles.appName}>BuBu</Text>
           <Text style={styles.appSub}>Nghe truyện ngôn tình & trinh thám</Text>
         </View>
-        <Pressable onPress={() => router.push("/history" as never)} style={styles.historyButton}>
-          <Feather color={theme.colors.text} name="clock" size={18} />
-        </Pressable>
+        <View style={styles.headerButtons}>
+          <Pressable onPress={() => setShowNotifSettings(true)} style={styles.headerIconButton}>
+            <Feather color={theme.colors.text} name="bell" size={18} />
+          </Pressable>
+          <Pressable onPress={() => router.push("/history" as never)} style={styles.headerIconButton}>
+            <Feather color={theme.colors.text} name="clock" size={18} />
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.searchSection}>
@@ -109,6 +116,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safeArea}>
+      <NotificationSettingsSheet visible={showNotifSettings} onClose={() => setShowNotifSettings(false)} />
       <FlatList
         data={isLoading ? [] : stories}
         keyExtractor={(item) => item.id}
@@ -156,7 +164,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between"
   },
-  historyButton: {
+  headerButtons: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12,
+  },
+  headerIconButton: {
     alignItems: "center",
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.line,
@@ -164,8 +177,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     height: 40,
     justifyContent: "center",
-    marginTop: 12,
-    width: 40
+    width: 40,
   },
   appName: {
     color: theme.colors.accent,

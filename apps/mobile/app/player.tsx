@@ -459,6 +459,13 @@ export default function PlayerScreen() {
       .finally(() => setIsLoadingMoreEpisodes(false));
   }, [isLoadingMoreEpisodes, loadedEpisodes.length, totalEpisodes, seriesId]);
 
+  // When within 3 episodes of the end of the loaded batch, fetch the next page so that
+  // auto-next and audio preloading never hit an empty boundary mid-playback.
+  useEffect(() => {
+    if (episodeIndex < 0 || loadedEpisodes.length >= totalEpisodes) return;
+    if (episodeIndex >= loadedEpisodes.length - 3) loadMoreEpisodes();
+  }, [episodeIndex, loadedEpisodes.length, totalEpisodes, loadMoreEpisodes]);
+
   const togglePlayback = async () => {
     if (!hasAudio) return;
     if (status.playing) {

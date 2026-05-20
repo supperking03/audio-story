@@ -1,7 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { postJson } from "../lib/api";
+import { getStoredPushPreference, savePushPreference } from "../lib/push-notifications";
 import { theme } from "../constants/theme";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 type RequestStoryCardProps = {
@@ -19,9 +20,17 @@ export function RequestStoryCard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [step, setStep] = useState<"form" | "notif-prompt">("form");
+  const [isSavingNotif, setIsSavingNotif] = useState(false);
+  const [alreadySubscribed, setAlreadySubscribed] = useState(false);
+
+  useEffect(() => {
+    getStoredPushPreference().then(setAlreadySubscribed);
+  }, []);
 
   const openModal = () => {
     setStatus("");
+    setStep("form");
     setRequestedTitle((current) => current || suggestedTitle || "");
     setShowModal(true);
   };
@@ -38,13 +47,26 @@ export function RequestStoryCard({
     try {
       await postJson("/api/mobile/story-requests", { title: titleValue });
       setRequestedTitle("");
-      setShowModal(false);
-      setStatus("Đã nhận yêu cầu của bạn.");
+      if (alreadySubscribed) {
+        setShowModal(false);
+        setStatus("Đã nhận yêu cầu của bạn.");
+      } else {
+        setStep("notif-prompt");
+      }
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Chưa gửi được yêu cầu.");
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleNotifChoice = async (wants: boolean) => {
+    setIsSavingNotif(true);
+    if (wants) await savePushPreference(true);
+    setIsSavingNotif(false);
+    setAlreadySubscribed(wants);
+    setShowModal(false);
+    setStatus("Đã nhận yêu cầu của bạn.");
   };
 
   return (
@@ -73,45 +95,81 @@ export function RequestStoryCard({
           style={styles.modalKeyboardContainer}
         >
           <View style={styles.sheetContainer}>
-            <ScrollView
-              contentContainerStyle={styles.sheetScrollContent}
-              keyboardShouldPersistTaps="always"
-            >
-              <View style={styles.sheet}>
-                <View style={styles.handle} />
-                <Text style={styles.sheetEyebrow}>Yêu cầu truyện</Text>
-                <Text style={styles.sheetTitle}>Bạn muốn nghe truyện nào?</Text>
-                <Text style={styles.sheetText}>Nhập tên truyện, mình sẽ ghi nhận để bổ sung sau.</Text>
-                <TextInput
-                  autoFocus
-                  editable={!isSubmitting}
-                  onChangeText={setRequestedTitle}
-                  placeholder="Ví dụ: Vụng Trộm Không Thể Giấu"
-                  placeholderTextColor={theme.colors.textMuted}
-                  style={styles.input}
-                  value={requestedTitle}
-                />
-                {status ? <Text style={styles.sheetStatus}>{status}</Text> : null}
-                <View style={styles.actions}>
-                  <Pressable disabled={isSubmitting} onPress={() => setShowModal(false)} style={styles.secondaryButton}>
-                    <Text style={styles.secondaryText}>Đóng</Text>
-                  </Pressable>
-                  <Pressable
-                    disabled={isSubmitting}
-                    onPress={() => {
-                      void submitRequest();
-                    }}
-                    style={[styles.primaryButton, isSubmitting && styles.primaryButtonDisabled]}
-                  >
-                    {isSubmitting ? (
-                      <ActivityIndicator color="#11131C" size="small" />
-                    ) : (
-                      <Text style={styles.primaryText}>Gửi yêu cầu</Text>
-                    )}
-                  </Pressable>
+            {step === "form" ? (
+              <ScrollView
+                contentContainerStyle={styles.sheetScrollContent}
+                keyboardShouldPersistTaps="always"
+              >
+                <View style={styles.sheet}>
+                  <View style={styles.handle} />
+                  <Text style={styles.sheetEyebrow}>Yêu cầu truyện</Text>
+                  <Text style={styles.sheetTitle}>Bạn muốn nghe truyện nào?</Text>
+                  <Text style={styles.sheetText}>Nhập tên truyện, mình sẽ ghi nhận để bổ sung sau.</Text>
+                  <TextInput
+                    autoFocus
+                    editable={!isSubmitting}
+                    onChangeText={setRequestedTitle}
+                    placeholder="Ví dụ: Vụng Trộm Không Thể Giấu"
+                    placeholderTextColor={theme.colors.textMuted}
+                    style={styles.input}
+                    value={requestedTitle}
+                  />
+                  {status ? <Text style={styles.sheetStatus}>{status}</Text> : null}
+                  <View style={styles.actions}>
+                    <Pressable disabled={isSubmitting} onPress={() => setShowModal(false)} style={styles.secondaryButton}>
+                      <Text style={styles.secondaryText}>Đóng</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={isSubmitting}
+                      onPress={() => { void submitRequest(); }}
+                      style={[styles.primaryButton, isSubmitting && styles.primaryButtonDisabled]}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator color="#11131C" size="small" />
+                      ) : (
+                        <Text style={styles.primaryText}>Gửi yêu cầu</Text>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              </ScrollView>
+            ) : (
+              <View style={styles.sheetScrollContent}>
+                <View style={styles.sheet}>
+                  <View style={styles.handle} />
+                  <View style={styles.notifIconRow}>
+                    <Feather color={theme.colors.warning} name="bell" size={32} />
+                  </View>
+                  <Text style={styles.sheetTitle}>Nhận thông báo truyện mới?</Text>
+                  <Text style={styles.sheetText}>
+                    Mình sẽ báo bạn ngay khi có truyện mới hoặc chương mới được thêm vào.
+                  </Text>
+                  <View style={styles.actions}>
+                    <Pressable
+                      disabled={isSavingNotif}
+                      onPress={() => { void handleNotifChoice(false); }}
+                      style={styles.secondaryButton}
+                    >
+                      <Text style={styles.secondaryText}>Không cần</Text>
+                    </Pressable>
+                    <Pressable
+                      disabled={isSavingNotif}
+                      onPress={() => { void handleNotifChoice(true); }}
+                      style={[styles.primaryButton, isSavingNotif && styles.primaryButtonDisabled]}
+                    >
+                      {isSavingNotif ? (
+                        <ActivityIndicator color="#11131C" size="small" />
+                      ) : (
+                        <>
+                          <Feather color="#11131C" name="bell" size={16} />
+                          <Text style={styles.primaryText}>Bật thông báo</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
                 </View>
               </View>
-            </ScrollView>
+            )}
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -204,6 +262,10 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     width: 42,
   },
+  notifIconRow: {
+    alignItems: "center",
+    paddingVertical: 4,
+  },
   sheetEyebrow: {
     color: theme.colors.warning,
     fontSize: 12,
@@ -262,6 +324,8 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.warning,
     borderRadius: theme.radius.pill,
     flex: 1.3,
+    flexDirection: "row",
+    gap: 8,
     justifyContent: "center",
     minHeight: 48,
     paddingHorizontal: 18,

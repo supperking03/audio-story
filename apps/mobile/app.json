@@ -17,7 +17,11 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#150942"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "experiments": {
       "typedRoutes": true
@@ -29,15 +33,31 @@
         {
           "enableBackgroundPlayback": true
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0A0B11",
+          "sounds": []
+        }
       ]
     ],
-    "extra": {},
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "da2a6e10-ed50-48fb-b93e-65f0ebdbc532"
+      }
+    },
     "ios": {
       "bundleIdentifier": "com.supperking03.audio-story",
       "buildNumber": "5",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
-    }
+    },
+    "owner": "supperking03"
   }
 }
