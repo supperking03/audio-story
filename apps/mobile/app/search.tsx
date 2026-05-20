@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -10,7 +10,7 @@ import { RequestStoryCard } from "../components/request-story-card";
 import { SectionHeader } from "../components/section-header";
 import { StoryCard } from "../components/story-card";
 import { theme } from "../constants/theme";
-import { searchSeries } from "../data/story-service";
+import { searchStories, type StorySeries } from "../data/story-service";
 import { useResponsive } from "../hooks/use-responsive";
 import { useStories } from "../hooks/use-stories";
 
@@ -18,47 +18,61 @@ export default function SearchScreen() {
   const params = useLocalSearchParams<{ query?: string }>();
   const initialQuery = params.query ?? "";
   const [query, setQuery] = useState(initialQuery);
-  const { stories, isLoading, error } = useStories();
+  const [results, setResults] = useState<StorySeries[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { stories, isLoading } = useStories();
   const { isTablet, hPad } = useResponsive();
+
   const filterTags = useMemo(() => {
     const counts = new Map<string, number>();
-
     for (const story of stories) {
       for (const tag of story.tags) {
         const normalized = tag.trim();
-        if (!normalized) {
-          continue;
-        }
+        if (!normalized) continue;
         counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
       }
     }
-
     return [...counts.entries()]
       .sort((a, b) => {
         const countDiff = b[1] - a[1];
-        if (countDiff !== 0) {
-          return countDiff;
-        }
+        if (countDiff !== 0) return countDiff;
         return a[0].localeCompare(b[0], "vi");
       })
       .slice(0, 10)
       .map(([tag]) => tag);
   }, [stories]);
 
-  const results = useMemo(() => searchSeries(stories, query), [query, stories]);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = query.trim();
+    if (!q) {
+      setResults([]);
+      setSearchError(null);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      setIsSearching(true);
+      setSearchError(null);
+      searchStories(q)
+        .then(({ stories: found }) => setResults(found))
+        .catch((err: unknown) => setSearchError(err instanceof Error ? err.message : "Lỗi tìm kiếm."))
+        .finally(() => setIsSearching(false));
+    }, 300);
+  }, [query]);
+
+  const displayResults = query.trim() ? results : stories;
+
   const episodeResults = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-
-    if (!normalized) {
-      return [];
-    }
-
-    return results.flatMap((series) =>
+    if (!normalized) return [];
+    return displayResults.flatMap((series) =>
       series.episodes
         .filter((episode) => episode.title.toLowerCase().includes(normalized))
         .slice(0, 2)
     );
-  }, [query, results]);
+  }, [query, displayResults]);
 
   const openSeries = (seriesId: string) => {
     router.push({ pathname: "/series/[id]", params: { id: seriesId } });
@@ -108,11 +122,11 @@ export default function SearchScreen() {
           </View>
 
           <View style={styles.section}>
-            <SectionHeader title={query ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
-            {isLoading ? <LoadingIndicator label="Đang tải truyện..." /> : null}
-            {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
+            <SectionHeader title={query.trim() ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
+            {(isLoading || isSearching) ? <LoadingIndicator label="Đang tìm..." /> : null}
+            {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
             <View style={styles.storyList}>
-              {results.map((series) => (
+              {displayResults.map((series) => (
                 <View
                   key={series.id}
                   style={[
@@ -135,7 +149,7 @@ export default function SearchScreen() {
                     key={episode.id}
                     episode={episode}
                     onPress={() => {
-                      const parentSeries = results.find((series) =>
+                      const parentSeries = displayResults.find((series) =>
                         series.episodes.some((seriesEpisode) => seriesEpisode.id === episode.id)
                       );
                       if (parentSeries) {

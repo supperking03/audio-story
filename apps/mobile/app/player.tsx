@@ -4,10 +4,11 @@ import { useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Animated, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingIndicator } from "../components/loading-indicator";
+import { RequestStoryCard } from "../components/request-story-card";
 import { usePlayerMeta } from "../contexts/player-context";
 import { theme } from "../constants/theme";
 import { getFallbackNowPlaying, loadEpisodeById, loadStoryEpisodes, type Episode } from "../data/story-service";
@@ -15,6 +16,7 @@ import { useResponsive } from "../hooks/use-responsive";
 import { useSingletonPlayer } from "../hooks/use-singleton-player";
 import { useStory } from "../hooks/use-story";
 import { clearProgress, saveProgress } from "../lib/playback-store";
+import { recordEpisodeFinished } from "../lib/review-prompt";
 
 const MIN_SPEED = 0.5;
 const MAX_SPEED = 2.5;
@@ -59,6 +61,7 @@ function snapSpeed(value: number) {
 export default function PlayerScreen() {
   const nowPlaying = getFallbackNowPlaying();
   const { isTablet, hPad } = useResponsive();
+  const { height: screenHeight } = useWindowDimensions();
   const params = useLocalSearchParams<{ episodeId?: string; seriesId?: string; resumeTime?: string }>();
   const resumeTime = params.resumeTime ? Number(params.resumeTime) : null;
   const resumeEpisodeId = resumeTime !== null ? (params.episodeId ?? null) : null;
@@ -80,6 +83,7 @@ export default function PlayerScreen() {
   const [loadedEpisodes, setLoadedEpisodes] = useState<Episode[]>([]);
   const [totalEpisodes, setTotalEpisodes] = useState(0);
   const [isLoadingMoreEpisodes, setIsLoadingMoreEpisodes] = useState(false);
+  const [showEndCard, setShowEndCard] = useState(false);
   const { setMeta, remoteNextRef, remotePrevRef } = usePlayerMeta();
   const sleepTimerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -283,6 +287,8 @@ export default function PlayerScreen() {
     const currentIndex = orderedEpisodes.findIndex((ep) => ep.id === currentEpisode.id);
     const nextEpisode = currentIndex >= 0 ? orderedEpisodes[currentIndex + 1] : null;
 
+    void recordEpisodeFinished();
+
     if (nextEpisode) {
       saveTickRef.current = -1;
       hasResumedRef.current = true;
@@ -290,6 +296,7 @@ export default function PlayerScreen() {
       setCurrentEpisodeId(nextEpisode.id);
     } else {
       clearProgress(baseSeries.id);
+      setShowEndCard(true);
     }
   }, [baseSeries, currentEpisode, orderedEpisodes, player, sleepTimerKey, status.didJustFinish]);
 
@@ -504,7 +511,11 @@ export default function PlayerScreen() {
         style={styles.keyboardContainer}
       >
       <ScrollView
-        contentContainerStyle={[styles.content, isTablet && { paddingHorizontal: hPad }]}
+        contentContainerStyle={[
+          styles.content,
+          isTablet && { paddingHorizontal: hPad },
+          { paddingBottom: 48 }
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.headerRow}>
@@ -517,7 +528,7 @@ export default function PlayerScreen() {
           <View style={styles.headerSpacer} />
         </View>
 
-        <LinearGradient colors={coverColors} style={[styles.coverArt, isTablet && styles.coverArtTablet]}>
+        <LinearGradient colors={coverColors} style={[styles.coverArt, isTablet && styles.coverArtTablet, { minHeight: Math.min(280, screenHeight * 0.33) }]}>
           {isEpisodeSwitching ? (
             <View style={styles.episodeSwitchingBadge}>
               <ActivityIndicator color="#FFFFFF" size="small" />
@@ -612,6 +623,15 @@ export default function PlayerScreen() {
             onPress={currentEpisode?.transcriptText ? () => transcriptSheetRef.current?.present() : undefined}
           />
         </View>
+
+        {showEndCard ? (
+          <RequestStoryCard
+            autoSubmit
+            suggestedTitle={baseSeries?.title}
+            title="Hết truyện rồi!"
+            body="Nhấn để yêu cầu admin bổ sung tập tiếp theo."
+          />
+        ) : null}
 
         <Modal animationType="slide" transparent visible={showSpeedEditor} onRequestClose={() => setShowSpeedEditor(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setShowSpeedEditor(false)} />
@@ -711,6 +731,15 @@ export default function PlayerScreen() {
           ListFooterComponent={
             isLoadingMoreEpisodes ? (
               <ActivityIndicator color={theme.colors.accent} size="small" style={styles.episodeLoadingMore} />
+            ) : orderedEpisodes.length >= totalEpisodes && totalEpisodes > 0 ? (
+              <View style={styles.episodeListFooter}>
+                <RequestStoryCard
+                  autoSubmit
+                  suggestedTitle={baseSeries?.title}
+                  title="Muốn thêm tập mới?"
+                  body="Nhấn để yêu cầu admin bổ sung tập tiếp theo."
+                />
+              </View>
             ) : null
           }
           renderItem={({ item: ep }) => {
@@ -779,7 +808,6 @@ const styles = StyleSheet.create({
     flex: 1
   },
   content: {
-    flex: 1,
     gap: theme.spacing.xl,
     padding: theme.spacing.lg
   },
@@ -1160,6 +1188,10 @@ const styles = StyleSheet.create({
   episodeLoadingMore: {
     alignSelf: "center",
     paddingVertical: 12
+  },
+  episodeListFooter: {
+    paddingTop: 8,
+    paddingBottom: 16
   },
   transcriptContent: {
     paddingHorizontal: theme.spacing.lg,

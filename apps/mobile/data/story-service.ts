@@ -207,6 +207,13 @@ export async function loadStories(skip = 0, take = 20): Promise<{ stories: Story
   return { stories: data.stories.map(mapPreviewStory), total: data.total };
 }
 
+export async function searchStories(q: string, take = 50): Promise<{ stories: StorySeries[]; total: number }> {
+  const data = await fetchJson<{ stories: ApiStoryPreview[]; total: number }>(
+    `/api/mobile/stories?q=${encodeURIComponent(q)}&take=${take}&skip=0`,
+  );
+  return { stories: data.stories.map(mapPreviewStory), total: data.total };
+}
+
 export async function loadStoryById(id: string) {
   const data = await fetchJson<{ story: ApiStory }>(`/api/mobile/stories/${id}`);
   return mapStory(data.story);

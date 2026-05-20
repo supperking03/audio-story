@@ -7,6 +7,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingIndicator } from "../../components/loading-indicator";
+import { RequestStoryCard } from "../../components/request-story-card";
 import { theme } from "../../constants/theme";
 import { useResponsive } from "../../hooks/use-responsive";
 import { useStory } from "../../hooks/use-story";
@@ -29,6 +30,7 @@ export default function SeriesDetailScreen() {
 
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [totalEpisodes, setTotalEpisodes] = useState(0);
+  const [isLoadingEpisodes, setIsLoadingEpisodes] = useState(true);
   const [isLoadingMoreEpisodes, setIsLoadingMoreEpisodes] = useState(false);
   const isLoadingMoreEpisodesRef = useRef(false);
   const episodeSheetRef = useRef<BottomSheetModal>(null);
@@ -38,7 +40,7 @@ export default function SeriesDetailScreen() {
     loadStoryEpisodes(params.id, 0, 50).then(({ episodes: eps, total }) => {
       setEpisodes(eps);
       setTotalEpisodes(total);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setIsLoadingEpisodes(false));
   }, [params.id]);
 
   const loadMoreEpisodes = useCallback(() => {
@@ -173,9 +175,11 @@ export default function SeriesDetailScreen() {
           >
             <Feather color={theme.colors.text} name="list" size={18} />
             <Text style={styles.episodeListButtonText}>
-              {totalEpisodes > 0 ? `${totalEpisodes} tập` : "Danh sách tập"}
+              {isLoadingEpisodes ? "Đang tải tập..." : totalEpisodes > 0 ? `${totalEpisodes} tập` : "Danh sách tập"}
             </Text>
-            <Feather color={theme.colors.textMuted} name="chevron-right" size={16} style={styles.episodeListChevron} />
+            {isLoadingEpisodes
+              ? <ActivityIndicator color={theme.colors.textMuted} size="small" />
+              : <Feather color={theme.colors.textMuted} name="chevron-right" size={16} style={styles.episodeListChevron} />}
           </Pressable>
         </View>
       </ScrollView>
@@ -200,9 +204,23 @@ export default function SeriesDetailScreen() {
           contentContainerStyle={styles.sheetList}
           onEndReached={loadMoreEpisodes}
           onEndReachedThreshold={0.3}
+          ListEmptyComponent={
+            isLoadingEpisodes ? (
+              <ActivityIndicator color={theme.colors.accent} size="small" style={styles.loadingMore} />
+            ) : null
+          }
           ListFooterComponent={
             isLoadingMoreEpisodes ? (
               <ActivityIndicator color={theme.colors.accent} size="small" style={styles.loadingMore} />
+            ) : episodes.length >= totalEpisodes && totalEpisodes > 0 ? (
+              <View style={styles.episodeListFooter}>
+                <RequestStoryCard
+                  autoSubmit
+                  suggestedTitle={series.title}
+                  title="Muốn thêm tập mới?"
+                  body="Nhấn để yêu cầu admin bổ sung tập tiếp theo."
+                />
+              </View>
             ) : null
           }
           ItemSeparatorComponent={() => <View style={styles.separator} />}
@@ -473,6 +491,10 @@ const styles = StyleSheet.create({
   loadingMore: {
     alignSelf: "center",
     paddingVertical: 16
+  },
+  episodeListFooter: {
+    paddingTop: 8,
+    paddingBottom: 16
   },
   missingState: {
     alignItems: "center",

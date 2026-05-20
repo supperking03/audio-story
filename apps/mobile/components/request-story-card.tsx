@@ -9,16 +9,18 @@ type RequestStoryCardProps = {
   suggestedTitle?: string;
   title?: string;
   body?: string;
+  autoSubmit?: boolean;
 };
 
 export function RequestStoryCard({
   suggestedTitle,
   title = "Thiếu truyện bạn muốn nghe?",
   body = "Gửi tên truyện để mình bổ sung sau.",
+  autoSubmit = false,
 }: RequestStoryCardProps) {
   const [requestedTitle, setRequestedTitle] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
   const [showModal, setShowModal] = useState(false);
   const [step, setStep] = useState<"form" | "notif-prompt">("form");
   const [isSavingNotif, setIsSavingNotif] = useState(false);
@@ -29,32 +31,43 @@ export function RequestStoryCard({
   }, []);
 
   const openModal = () => {
-    setStatus("");
+    setStatus("idle");
     setStep("form");
     setRequestedTitle((current) => current || suggestedTitle || "");
     setShowModal(true);
   };
 
+  const submitAutoRequest = async () => {
+    const titleValue = suggestedTitle?.trim();
+    if (!titleValue || isSubmitting || status === "sent") return;
+    setIsSubmitting(true);
+    try {
+      await postJson("/api/mobile/story-requests", { title: `${titleValue} - thêm tập mới` });
+      setStatus("sent");
+    } catch {
+      setStatus("error");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const submitRequest = async () => {
     const titleValue = requestedTitle.trim();
-    if (!titleValue) {
-      setStatus("Nhập tên truyện trước đã.");
-      return;
-    }
+    if (!titleValue) return;
 
     setIsSubmitting(true);
-    setStatus("");
+    setStatus("idle");
     try {
       await postJson("/api/mobile/story-requests", { title: titleValue });
       setRequestedTitle("");
       if (alreadySubscribed) {
         setShowModal(false);
-        setStatus("Đã nhận yêu cầu của bạn.");
+        setStatus("sent");
       } else {
         setStep("notif-prompt");
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "Chưa gửi được yêu cầu.");
+      setStatus("error");
     } finally {
       setIsSubmitting(false);
     }
@@ -68,6 +81,41 @@ export function RequestStoryCard({
     setShowModal(false);
     setStatus("Đã nhận yêu cầu của bạn.");
   };
+
+  if (autoSubmit) {
+    const sent = status === "sent";
+    return (
+      <Pressable
+        disabled={isSubmitting || sent}
+        onPress={() => { void submitAutoRequest(); }}
+        style={[styles.card, sent && styles.cardSent]}
+      >
+        <View style={styles.copy}>
+          <Text style={styles.eyebrow}>Yêu cầu truyện</Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.body}>{body}</Text>
+        </View>
+        <View style={styles.actionRow}>
+          {sent ? (
+            <Text style={styles.inlineStatus}>Đã gửi yêu cầu!</Text>
+          ) : (
+            <View style={[styles.badge, (isSubmitting || status === "error") && styles.badgeDim]}>
+              {isSubmitting ? (
+                <ActivityIndicator color="#11131C" size="small" />
+              ) : status === "error" ? (
+                <Text style={styles.badgeText}>Lỗi, thử lại</Text>
+              ) : (
+                <>
+                  <Feather color="#11131C" name="plus" size={16} />
+                  <Text style={styles.badgeText}>Yêu cầu thêm tập</Text>
+                </>
+              )}
+            </View>
+          )}
+        </View>
+      </Pressable>
+    );
+  }
 
   return (
     <>
@@ -185,6 +233,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 14,
     padding: theme.spacing.lg,
+  },
+  cardSent: {
+    opacity: 0.7,
+  },
+  badgeDim: {
+    opacity: 0.75,
   },
   copy: {
     gap: 6,
