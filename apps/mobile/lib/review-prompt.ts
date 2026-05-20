@@ -2,8 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const KEY_EPISODES_FINISHED = "bubu_episodes_finished_count";
 const KEY_LAST_PROMPTED = "bubu_review_last_prompted";
-const TRIGGER_AFTER_EPISODES = 3;
-const MIN_DAYS_BETWEEN_PROMPTS = 60;
+const TRIGGER_AFTER_EPISODES = 1; // TODO: restore to 3 before release
+const MIN_DAYS_BETWEEN_PROMPTS = 0; // TODO: restore to 60 before release
 
 export async function recordEpisodeFinished(): Promise<void> {
   try {
