@@ -9,7 +9,7 @@
     "icon": "./assets/icon.png",
     "favicon": "./assets/favicon.png",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#0A0B11"
     },
