@@ -122,8 +122,12 @@ export default function SearchScreen() {
           </View>
 
           <View style={styles.section}>
-            <SectionHeader title={query.trim() ? `${results.length} kết quả` : "Gợi ý cho bạn"} />
-            {(isLoading || isSearching) ? <LoadingIndicator label="Đang tìm..." /> : null}
+            <SectionHeader title={
+              query.trim()
+                ? isSearching ? "Đang tìm..." : `${results.length} kết quả`
+                : "Gợi ý cho bạn"
+            } />
+            {(isLoading || isSearching) ? <LoadingIndicator label="" /> : null}
             {searchError ? <Text style={styles.errorText}>{searchError}</Text> : null}
             <View style={styles.storyList}>
               {displayResults.map((series) => (
