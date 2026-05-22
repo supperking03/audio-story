@@ -169,14 +169,14 @@ export default function PlayerScreen() {
 
   const currentEpisode = useMemo(() => {
     if (currentEpisodeId) {
-      const baseEpisode = orderedEpisodes.find((episode) => episode.id === currentEpisodeId) ?? null;
-      if (!baseEpisode) {
-        return null;
-      }
+      const baseEpisode = orderedEpisodes.find((episode) => episode.id === currentEpisodeId);
+      const assets = episodeAssets[currentEpisodeId];
+      // Use assets alone if orderedEpisodes hasn't loaded yet (direct navigation)
+      if (!baseEpisode && !assets) return null;
       return {
-        ...baseEpisode,
-        ...(episodeAssets[currentEpisodeId] ?? {}),
-      };
+        ...(baseEpisode ?? {}),
+        ...(assets ?? {}),
+      } as typeof baseEpisode & typeof assets;
     }
 
     return orderedEpisodes[orderedEpisodes.length - 1] ?? null;
