@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 10,
-    maxHeight: 78,
+    maxHeight: 76,
     overflow: "hidden"
   },
   placeholder: {
@@ -222,12 +222,12 @@ const styles = StyleSheet.create({
   filterChip: {
     backgroundColor: theme.colors.card,
     borderRadius: theme.radius.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 10
+    paddingHorizontal: 10,
+    paddingVertical: 6
   },
   filterText: {
     color: theme.colors.accentSoft,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "700"
   },
   sectionHeaderRow: {
