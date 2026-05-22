@@ -5,6 +5,8 @@ import { theme } from "../constants/theme";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
+const isIOS = Platform.OS === "ios";
+
 type RequestStoryCardProps = {
   suggestedTitle?: string;
   title?: string;
@@ -60,7 +62,7 @@ export function RequestStoryCard({
     try {
       await postJson("/api/mobile/story-requests", { title: titleValue });
       setRequestedTitle("");
-      if (alreadySubscribed) {
+      if (alreadySubscribed || !isIOS) {
         setShowModal(false);
         setStatus("sent");
       } else {

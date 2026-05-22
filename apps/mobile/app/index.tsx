@@ -1,7 +1,7 @@
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingIndicator } from "../components/loading-indicator";
@@ -55,9 +55,11 @@ export default function HomeScreen() {
           <Text style={styles.appSub}>Nghe truyện ngôn tình & trinh thám</Text>
         </View>
         <View style={styles.headerButtons}>
-          <Pressable onPress={() => setShowNotifSettings(true)} style={styles.headerIconButton}>
-            <Feather color={theme.colors.text} name="bell" size={18} />
-          </Pressable>
+          {Platform.OS === "ios" ? (
+            <Pressable onPress={() => setShowNotifSettings(true)} style={styles.headerIconButton}>
+              <Feather color={theme.colors.text} name="bell" size={18} />
+            </Pressable>
+          ) : null}
           <Pressable onPress={() => router.push("/history" as never)} style={styles.headerIconButton}>
             <Feather color={theme.colors.text} name="clock" size={18} />
           </Pressable>
