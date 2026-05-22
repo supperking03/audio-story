@@ -84,10 +84,7 @@ export default function HomeScreen() {
         </View>
       </View>
 
-      <View style={styles.sectionHeaderRow}>
-        <SectionHeader title="Tất cả truyện" />
-        {total > 0 ? <Text style={styles.totalLabel}>{total} truyện</Text> : null}
-      </View>
+      <SectionHeader title="Tất cả truyện" />
       {isLoading ? <LoadingIndicator label="Đang tải danh sách truyện..." /> : null}
       {error ? <Text style={styles.errorText}>Lỗi API: {error}</Text> : null}
       {!isLoading && !error && stories.length === 0 ? (
