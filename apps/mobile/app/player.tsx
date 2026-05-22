@@ -473,6 +473,14 @@ export default function PlayerScreen() {
     if (episodeIndex >= loadedEpisodes.length - 3) loadMoreEpisodes();
   }, [episodeIndex, loadedEpisodes.length, totalEpisodes, loadMoreEpisodes]);
 
+  // If the player was opened on an episode beyond the first loaded batch (e.g. ep 56 when
+  // only 50 were fetched), keep loading pages until the episode appears in orderedEpisodes.
+  useEffect(() => {
+    if (!currentEpisodeId || episodeIndex >= 0 || totalEpisodes === 0) return;
+    if (loadedEpisodes.length >= totalEpisodes) return;
+    loadMoreEpisodes();
+  }, [currentEpisodeId, episodeIndex, loadedEpisodes.length, totalEpisodes, loadMoreEpisodes]);
+
   const togglePlayback = async () => {
     if (!hasAudio) return;
     if (status.playing) {
