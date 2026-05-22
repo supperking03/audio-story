@@ -126,7 +126,7 @@ export function RequestStoryCard({
           <Text style={styles.eyebrow}>Yêu cầu truyện</Text>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.body}>{body}</Text>
-          {status ? <Text style={styles.inlineStatus}>{status}</Text> : null}
+          {status !== "idle" ? <Text style={styles.inlineStatus}>{status}</Text> : null}
         </View>
         <View style={styles.actionRow}>
           <View style={styles.badge}>
@@ -164,7 +164,7 @@ export function RequestStoryCard({
                     style={styles.input}
                     value={requestedTitle}
                   />
-                  {status ? <Text style={styles.sheetStatus}>{status}</Text> : null}
+                  {status !== "idle" ? <Text style={styles.sheetStatus}>{status}</Text> : null}
                   <View style={styles.actions}>
                     <Pressable disabled={isSubmitting} onPress={() => setShowModal(false)} style={styles.secondaryButton}>
                       <Text style={styles.secondaryText}>Đóng</Text>
