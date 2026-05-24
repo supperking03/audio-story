@@ -3,7 +3,7 @@
     "name": "BuBu: Truyện Audio",
     "slug": "bubu-truyen-audio",
     "scheme": "audiostory",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "icon": "./assets/icon.png",

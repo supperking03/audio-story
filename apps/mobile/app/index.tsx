@@ -207,9 +207,7 @@ const styles = StyleSheet.create({
   filterRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 10,
-    maxHeight: 76,
-    overflow: "hidden"
+    gap: 10
   },
   placeholder: {
     color: theme.colors.textMuted,

@@ -99,6 +99,9 @@ export default function HistoryScreen() {
             <Text style={styles.headerTitle}>Lịch sử nghe</Text>
             <Text style={styles.headerSubtitle}>Truyện nghe gần nhất ở trên cùng</Text>
           </View>
+          <Pressable onPress={() => router.push("/downloads" as never)} style={styles.iconButton}>
+            <Feather color={theme.colors.text} name="download" size={18} />
+          </Pressable>
           <Pressable disabled={items.length === 0} onPress={confirmClearAll} style={[styles.iconButton, items.length === 0 && styles.disabledButton]}>
             <Feather color={theme.colors.text} name="trash-2" size={18} />
           </Pressable>

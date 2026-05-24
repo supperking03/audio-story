@@ -15,6 +15,7 @@ import { getFallbackNowPlaying, loadEpisodeById, loadStoryEpisodes, type Episode
 import { useResponsive } from "../hooks/use-responsive";
 import { useSingletonPlayer } from "../hooks/use-singleton-player";
 import { useStory } from "../hooks/use-story";
+import { deleteOfflineEpisode, downloadEpisode, getOfflineUri } from "../lib/offline-store";
 import { clearProgress, saveProgress } from "../lib/playback-store";
 import { recordEpisodeFinished } from "../lib/review-prompt";
 
@@ -84,6 +85,10 @@ export default function PlayerScreen() {
   const [totalEpisodes, setTotalEpisodes] = useState(0);
   const [isLoadingMoreEpisodes, setIsLoadingMoreEpisodes] = useState(false);
   const [showEndCard, setShowEndCard] = useState(false);
+  const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "downloaded">("idle");
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [localAudioUri, setLocalAudioUri] = useState<string | null>(null);
   const { setMeta, remoteNextRef, remotePrevRef } = usePlayerMeta();
   const sleepTimerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -158,6 +163,19 @@ export default function PlayerScreen() {
     hasResumedRef.current = false;
   }, [resumeEpisodeId, resumeTime]);
 
+  useEffect(() => {
+    if (!currentEpisodeId) {
+      setLocalAudioUri(null);
+      setDownloadState("idle");
+      return;
+    }
+    getOfflineUri(currentEpisodeId).then((uri) => {
+      setLocalAudioUri(uri);
+      setDownloadState(uri ? "downloaded" : "idle");
+      setDownloadProgress(0);
+    });
+  }, [currentEpisodeId]);
+
   const orderedEpisodes = loadedEpisodes.length > 0 ? loadedEpisodes : (baseSeries?.episodes ?? []);
 
   useEffect(() => {
@@ -182,7 +200,7 @@ export default function PlayerScreen() {
     return orderedEpisodes[orderedEpisodes.length - 1] ?? null;
   }, [currentEpisodeId, episodeAssets, orderedEpisodes]);
 
-  const player = useSingletonPlayer(currentEpisode?.audioUrl ?? null, currentEpisode?.id ?? null);
+  const player = useSingletonPlayer(localAudioUri ?? currentEpisode?.audioUrl ?? null, currentEpisode?.id ?? null);
   const status = useAudioPlayerStatus(player);
   const hasAudio = Boolean(currentEpisode?.audioUrl);
 
@@ -444,6 +462,38 @@ export default function PlayerScreen() {
     })
   ).current;
 
+  const handleDownloadPress = () => {
+    if (downloadState === "downloaded") {
+      setShowDeleteConfirm(true);
+      return;
+    }
+    if (downloadState === "downloading" || !currentEpisode?.audioUrl || !currentEpisodeId) return;
+    setDownloadState("downloading");
+    setDownloadProgress(0);
+    downloadEpisode(
+      currentEpisodeId,
+      currentEpisode.audioUrl,
+      currentEpisode.title ?? "",
+      baseSeries?.title ?? "",
+      setDownloadProgress,
+      baseSeries?.id,
+    ).then((localUri) => {
+      setLocalAudioUri(localUri);
+      setDownloadState("downloaded");
+    }).catch((err) => {
+      console.error("[download] failed:", err);
+      setDownloadState("idle");
+    });
+  };
+
+  const handleDeleteDownload = async () => {
+    if (!currentEpisodeId) return;
+    await deleteOfflineEpisode(currentEpisodeId);
+    setLocalAudioUri(null);
+    setDownloadState("idle");
+    setShowDeleteConfirm(false);
+  };
+
   const changeEpisode = (direction: -1 | 1) => {
     if (!baseSeries || episodeIndex < 0) return;
     const nextEpisode = orderedEpisodes[episodeIndex + direction];
@@ -547,9 +597,33 @@ export default function PlayerScreen() {
         </LinearGradient>
 
         <View style={styles.metaSection}>
-          <Text style={styles.storyEpisode}>
-            {currentEpisode?.durationLabel ?? "Chưa rõ"} • {selectedSpeed.toFixed(1)}x
-          </Text>
+          <View style={styles.metaRow}>
+            <Text style={styles.storyEpisode}>
+              {currentEpisode?.durationLabel ?? "Chưa rõ"} • {selectedSpeed.toFixed(1)}x
+            </Text>
+            {hasAudio && currentEpisode ? (
+              <Pressable
+                disabled={downloadState === "downloading"}
+                onPress={handleDownloadPress}
+                style={[styles.downloadButton, downloadState === "downloaded" && styles.downloadButtonDone]}
+              >
+                {downloadState === "downloading" ? (
+                  <ActivityIndicator color={theme.colors.textMuted} size="small" style={{ width: 16, height: 16 }} />
+                ) : downloadState === "downloaded" ? (
+                  <Feather color={theme.colors.accent} name="check-circle" size={14} />
+                ) : (
+                  <Feather color={theme.colors.textMuted} name="download" size={14} />
+                )}
+                <Text style={[styles.downloadButtonText, downloadState === "downloaded" && styles.downloadButtonTextDone]}>
+                  {downloadState === "downloading"
+                    ? `${Math.round(downloadProgress * 100)}%`
+                    : downloadState === "downloaded"
+                    ? "Đã tải"
+                    : "Tải về"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
           {!hasAudio && !isEpisodeSwitching && !episodeAssetError ? (
             <Text style={styles.helperText}>Tập này chưa có file audio thật.</Text>
           ) : null}
@@ -640,6 +714,31 @@ export default function PlayerScreen() {
             body="Nhấn để yêu cầu admin bổ sung tập tiếp theo."
           />
         ) : null}
+
+        <Modal animationType="slide" transparent visible={showDeleteConfirm} onRequestClose={() => setShowDeleteConfirm(false)}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowDeleteConfirm(false)} />
+          <View style={styles.deleteConfirmSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.deleteConfirmTitle}>Xoá file đã tải?</Text>
+            <Text style={styles.deleteConfirmBody}>
+              Tập này sẽ bị xoá khỏi bộ nhớ máy. Bạn vẫn có thể nghe lại khi có mạng.
+            </Text>
+            <View style={styles.deleteConfirmActions}>
+              <Pressable
+                onPress={() => {
+                  setShowDeleteConfirm(false);
+                  router.push("/downloads" as never);
+                }}
+                style={styles.speedEditorSecondary}
+              >
+                <Text style={styles.speedEditorSecondaryText}>Tập đã tải</Text>
+              </Pressable>
+              <Pressable onPress={() => { void handleDeleteDownload(); }} style={styles.speedEditorPrimary}>
+                <Text style={styles.speedEditorPrimaryText}>Xoá</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
 
         <Modal animationType="slide" transparent visible={showSpeedEditor} onRequestClose={() => setShowSpeedEditor(false)}>
           <Pressable style={styles.modalBackdrop} onPress={() => setShowSpeedEditor(false)} />
@@ -1214,5 +1313,55 @@ const styles = StyleSheet.create({
     color: theme.colors.textMuted,
     fontSize: 16,
     fontWeight: "600"
-  }
+  },
+  metaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  downloadButton: {
+    alignItems: "center",
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.line,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  downloadButtonDone: {
+    borderColor: theme.colors.accent,
+  },
+  downloadButtonText: {
+    color: theme.colors.textMuted,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  downloadButtonTextDone: {
+    color: theme.colors.accent,
+  },
+  deleteConfirmSheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: theme.radius.lg,
+    borderTopRightRadius: theme.radius.lg,
+    gap: 16,
+    padding: theme.spacing.lg,
+    paddingBottom: 40,
+  },
+  deleteConfirmTitle: {
+    color: theme.colors.text,
+    fontSize: 17,
+    fontWeight: "800",
+  },
+  deleteConfirmBody: {
+    color: theme.colors.textMuted,
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  deleteConfirmActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 4,
+  },
 });
