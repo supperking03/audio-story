@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "com.supperking03.audiostory",
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#150942"
