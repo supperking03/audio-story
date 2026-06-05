@@ -3,7 +3,7 @@
     "name": "BuBu: Truyện Audio",
     "slug": "bubu-truyen-audio",
     "scheme": "audiostory",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "icon": "./assets/icon.png",
@@ -15,7 +15,7 @@
     },
     "android": {
       "package": "com.supperking03.audiostory",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#150942"
@@ -53,7 +53,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.supperking03.audio-story",
-      "buildNumber": "11",
+      "buildNumber": "12",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
