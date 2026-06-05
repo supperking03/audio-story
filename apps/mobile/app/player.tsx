@@ -59,6 +59,23 @@ function snapSpeed(value: number) {
   return Number(clamp(snapped, MIN_SPEED, MAX_SPEED).toFixed(1));
 }
 
+async function loadEpisodeWithRetry(episodeId: string, maxAttempts = 3): Promise<Episode> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await loadEpisodeById(episodeId);
+    } catch (err) {
+      lastError = err;
+      console.warn(`[player] loadEpisodeById(${episodeId}) attempt ${attempt + 1}/${maxAttempts} failed:`, err);
+      if (attempt < maxAttempts - 1) {
+        const delayMs = 500 * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
 export default function PlayerScreen() {
   const nowPlaying = getFallbackNowPlaying();
   const { isTablet, hPad } = useResponsive();
@@ -213,7 +230,7 @@ export default function PlayerScreen() {
     setEpisodeAssetError(null);
     setIsEpisodeSwitching(true);
 
-    loadEpisodeById(currentEpisodeId)
+    loadEpisodeWithRetry(currentEpisodeId)
       .then((episode) => {
         if (isCancelled) {
           return;
@@ -224,6 +241,7 @@ export default function PlayerScreen() {
         if (isCancelled) {
           return;
         }
+        console.error("[player] lazy-load failed after retries:", err);
         setEpisodeAssetError(err instanceof Error ? err.message : "Không tải được audio tập này.");
       })
       .finally(() => {
@@ -288,12 +306,12 @@ export default function PlayerScreen() {
     });
   }, [baseSeries, currentEpisode, playbackTick, status.currentTime, status.playing]);
 
-  const prevDidJustFinishRef = useRef(false);
-  useEffect(() => {
-    const risingEdge = status.didJustFinish && !prevDidJustFinishRef.current;
-    prevDidJustFinishRef.current = status.didJustFinish;
-
-    if (!risingEdge || !currentEpisode || !baseSeries) return;
+  // Single source of truth for "advance to next episode" — called from both the
+  // didJustFinish rising-edge effect and the watchdog. Kept in a ref so the
+  // watchdog interval always sees the latest closure without re-creating the interval.
+  const advanceToNextRef = useRef<() => void>(() => {});
+  advanceToNextRef.current = () => {
+    if (!currentEpisode || !baseSeries) return;
 
     if (sleepTimerKey === "episode") {
       clearSleepTimer();
@@ -316,23 +334,64 @@ export default function PlayerScreen() {
       clearProgress(baseSeries.id);
       setShowEndCard(true);
     }
-  }, [baseSeries, currentEpisode, orderedEpisodes, player, sleepTimerKey, status.didJustFinish]);
+  };
+
+  const prevDidJustFinishRef = useRef(false);
+  useEffect(() => {
+    const risingEdge = status.didJustFinish && !prevDidJustFinishRef.current;
+    prevDidJustFinishRef.current = status.didJustFinish;
+    if (risingEdge) advanceToNextRef.current();
+  }, [status.didJustFinish]);
+
+  // Watchdog: didJustFinish doesn't always fire reliably — iOS background JS throttling
+  // or a network blip near the end of a chapter can leave the player silent without the
+  // event firing. Every second, check if currentTime has stalled within the last 2s of
+  // the track; if it stays stuck >2.5s, force the advance ourselves.
+  const watchdogStatusRef = useRef(status);
+  watchdogStatusRef.current = status;
+  useEffect(() => {
+    if (!currentEpisode?.id) return;
+    let lastTime = -1;
+    let stuckSince = 0;
+    const interval = setInterval(() => {
+      const s = watchdogStatusRef.current;
+      if (!s || !s.duration || s.duration < 5) return;
+      const remaining = s.duration - s.currentTime;
+      const nearEnd = remaining < 2;
+      if (nearEnd && s.currentTime > 0 && s.currentTime === lastTime) {
+        if (stuckSince === 0) {
+          stuckSince = Date.now();
+        } else if (Date.now() - stuckSince > 2500) {
+          console.warn("[player] watchdog: stalled near end without didJustFinish, forcing advance");
+          stuckSince = 0;
+          lastTime = -1;
+          advanceToNextRef.current();
+        }
+      } else {
+        lastTime = s.currentTime;
+        stuckSince = 0;
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [currentEpisode?.id]);
 
   const episodeIndex = orderedEpisodes.findIndex((episode) => episode.id === currentEpisode?.id);
 
   // Pre-load the next episode's audio URL while the current one is playing,
   // so the transition is instant and the player never goes idle (which causes iOS to suspend the app).
+  // On failure, remove from the in-flight set so the next render can retry.
   const preloadedEpisodeIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const nextEpisode = orderedEpisodes[episodeIndex + 1];
     if (!nextEpisode || episodeAssets[nextEpisode.id]?.audioUrl) return;
     if (preloadedEpisodeIdsRef.current.has(nextEpisode.id)) return;
     preloadedEpisodeIdsRef.current.add(nextEpisode.id);
-    loadEpisodeById(nextEpisode.id)
+    loadEpisodeWithRetry(nextEpisode.id)
       .then((episode) => {
         setEpisodeAssets((prev) => ({ ...prev, [nextEpisode.id]: episode }));
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[player] preload next episode failed:", nextEpisode.id, err);
         preloadedEpisodeIdsRef.current.delete(nextEpisode.id);
       });
   }, [episodeIndex, orderedEpisodes, episodeAssets]);

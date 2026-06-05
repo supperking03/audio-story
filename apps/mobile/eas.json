@@ -12,7 +12,9 @@
         "buildConfiguration": "Release"
       },
       "distribution": "store",
-      "env": {}
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://audio-story-platform-web-vot4.vercel.app"
+      }
     }
   },
   "submit": {

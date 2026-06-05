@@ -1,5 +1,6 @@
 import Constants from "expo-constants";
 
+const PRODUCTION_API_URL = "https://audio-story-platform-web-vot4.vercel.app";
 const fallbackBaseUrl = "http://192.168.1.151:3000";
 
 function getExpoHost() {
@@ -24,6 +25,11 @@ export function getApiBaseUrl() {
   const configUrl = Constants.expoConfig?.extra?.apiBaseUrl;
   if (typeof configUrl === "string" && configUrl) {
     return configUrl.replace(/\/$/, "");
+  }
+
+  // In production builds (no dev server host), always use the deployed API
+  if (!__DEV__) {
+    return PRODUCTION_API_URL;
   }
 
   const expoHost = getExpoHost();
