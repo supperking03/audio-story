@@ -1,36 +1,64 @@
 import { Feather } from "@expo/vector-icons";
-import { useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, usePathname } from "expo-router";
+import { useEffect } from "react";
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import TrackPlayer, { Event, State, usePlaybackState, useProgress } from "react-native-track-player";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { usePlayerMeta } from "../contexts/player-context";
-import { getPlayer } from "../hooks/use-singleton-player";
 import { theme } from "../constants/theme";
 
 export function MiniPlayer() {
   const pathname = usePathname();
-  const { meta, setMeta, remoteNextRef, remotePrevRef } = usePlayerMeta();
-  const player = getPlayer();
-  const status = useAudioPlayerStatus(player);
+  const { meta, setMeta } = usePlayerMeta();
+  const playbackState = usePlaybackState();
+  const { position, duration } = useProgress(0.5);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isTablet = width >= 768;
 
+  useEffect(() => {
+    const subscription = TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, ({ track }) => {
+      if (!track?.id || !track.title) return;
+      const episodeId = track.id;
+      const episodeTitle = track.title;
+      const seriesTitle = track.artist;
+      const artwork = track.artwork;
+      setMeta((currentMeta) => {
+        if (!currentMeta) return currentMeta;
+        return {
+          ...currentMeta,
+          episodeId,
+          episodeTitle,
+          seriesTitle: seriesTitle ?? currentMeta.seriesTitle,
+          coverImageUrl:
+            typeof artwork === "string" ? artwork : currentMeta.coverImageUrl,
+        };
+      });
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [setMeta]);
+
   if (pathname === "/player" || !meta) return null;
 
-  const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
+  const progress = duration > 0 ? position / duration : 0;
+  const playbackStateValue =
+    typeof playbackState === "object" && playbackState !== null && "state" in playbackState
+      ? playbackState.state
+      : playbackState;
+  const isPlaying = playbackStateValue === State.Playing;
 
   const openPlayer = () => {
     router.push({ pathname: "/player", params: { seriesId: meta.seriesId, episodeId: meta.episodeId } });
   };
 
-  const closeMiniPlayer = () => {
-    player.pause();
-    player.seekTo(0);
-    remoteNextRef.current = null;
-    remotePrevRef.current = null;
+  const closeMiniPlayer = async () => {
+    await TrackPlayer.stop();
+    await TrackPlayer.reset();
     setMeta(null);
   };
 
@@ -49,10 +77,10 @@ export function MiniPlayer() {
         </Pressable>
         <Pressable
           hitSlop={12}
-          onPress={() => (status.playing ? player.pause() : player.play())}
+          onPress={() => (isPlaying ? TrackPlayer.pause() : TrackPlayer.play())}
           style={styles.playBtn}
         >
-          <Feather color={theme.colors.text} name={status.playing ? "pause" : "play"} size={20} />
+          <Feather color={theme.colors.text} name={isPlaying ? "pause" : "play"} size={20} />
         </Pressable>
         <Pressable
           hitSlop={12}

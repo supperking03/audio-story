@@ -1,10 +1,10 @@
 import { Feather } from "@expo/vector-icons";
 import { BottomSheetBackdrop, BottomSheetFlatList, BottomSheetModal, BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import { useAudioPlayerStatus } from "expo-audio";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Animated, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import TrackPlayer, { Event, State, usePlaybackState, useProgress } from "react-native-track-player";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { LoadingIndicator } from "../components/loading-indicator";
@@ -13,11 +13,10 @@ import { usePlayerMeta } from "../contexts/player-context";
 import { theme } from "../constants/theme";
 import { getFallbackNowPlaying, loadEpisodeById, loadStoryEpisodes, type Episode } from "../data/story-service";
 import { useResponsive } from "../hooks/use-responsive";
-import { useSingletonPlayer } from "../hooks/use-singleton-player";
+import { ensureTrackPlayerSetup } from "../lib/track-player";
 import { useStory } from "../hooks/use-story";
 import { deleteOfflineEpisode, downloadEpisode, getOfflineUri } from "../lib/offline-store";
-import { clearProgress, saveProgress } from "../lib/playback-store";
-import { recordEpisodeFinished } from "../lib/review-prompt";
+import { clearProgress } from "../lib/playback-store";
 
 const MIN_SPEED = 0.5;
 const MAX_SPEED = 2.5;
@@ -76,6 +75,20 @@ async function loadEpisodeWithRetry(episodeId: string, maxAttempts = 3): Promise
   throw lastError;
 }
 
+type QueueTrack = {
+  id: string;
+  url: string;
+  title: string;
+  artist: string;
+  artwork?: string;
+  seriesId: string;
+  seriesTitle: string;
+};
+
+type ExistingQueueTrack = QueueTrack & {
+  [key: string]: unknown;
+};
+
 export default function PlayerScreen() {
   const nowPlaying = getFallbackNowPlaying();
   const { isTablet, hPad } = useResponsive();
@@ -105,9 +118,14 @@ export default function PlayerScreen() {
   const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "downloaded">("idle");
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [localAudioUri, setLocalAudioUri] = useState<string | null>(null);
-  const { setMeta, remoteNextRef, remotePrevRef } = usePlayerMeta();
+  const { setMeta } = usePlayerMeta();
   const sleepTimerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queueSeriesIdRef = useRef<string | null>(null);
+  const queuedEpisodeIdsRef = useRef<string[]>([]);
+  const activeTrackIdRef = useRef<string | null>(null);
+  const isQueueResettingRef = useRef(false);
+  const sleepTimerKeyRef = useRef<SleepTimerOptionKey>("off");
+  const queueSyncRequestRef = useRef(0);
 
   const clearSleepTimer = () => {
     if (sleepTimerTimeoutRef.current) {
@@ -181,13 +199,15 @@ export default function PlayerScreen() {
   }, [resumeEpisodeId, resumeTime]);
 
   useEffect(() => {
+    sleepTimerKeyRef.current = sleepTimerKey;
+  }, [sleepTimerKey]);
+
+  useEffect(() => {
     if (!currentEpisodeId) {
-      setLocalAudioUri(null);
       setDownloadState("idle");
       return;
     }
     getOfflineUri(currentEpisodeId).then((uri) => {
-      setLocalAudioUri(uri);
       setDownloadState(uri ? "downloaded" : "idle");
       setDownloadProgress(0);
     });
@@ -217,9 +237,34 @@ export default function PlayerScreen() {
     return orderedEpisodes[orderedEpisodes.length - 1] ?? null;
   }, [currentEpisodeId, episodeAssets, orderedEpisodes]);
 
-  const player = useSingletonPlayer(localAudioUri ?? currentEpisode?.audioUrl ?? null, currentEpisode?.id ?? null);
-  const status = useAudioPlayerStatus(player);
-  const hasAudio = Boolean(currentEpisode?.audioUrl);
+  const playbackState = usePlaybackState();
+  const playbackProgress = useProgress(0.5);
+  const playbackStateValue =
+    typeof playbackState === "object" && playbackState !== null && "state" in playbackState
+      ? playbackState.state
+      : playbackState;
+  const status = useMemo(() => ({
+    currentTime: playbackProgress.position,
+    duration: playbackProgress.duration,
+    playing: playbackStateValue === State.Playing,
+    didJustFinish: playbackStateValue === State.Ended,
+  }), [playbackProgress.duration, playbackProgress.position, playbackStateValue]);
+  const player = useMemo(() => ({
+    pause() {
+      void TrackPlayer.pause();
+    },
+    play() {
+      void TrackPlayer.play();
+    },
+    seekTo(seconds: number) {
+      void TrackPlayer.seekTo(seconds);
+    },
+  }), []);
+  const getEpisodeSource = useCallback((episode?: Episode | null) => {
+    if (!episode) return null;
+    return episodeAssets[episode.id]?.audioUrl ?? episode.audioUrl ?? null;
+  }, [episodeAssets]);
+  const hasAudio = Boolean(getEpisodeSource(currentEpisode));
 
   useEffect(() => {
     if (!currentEpisodeId || episodeAssets[currentEpisodeId]?.audioUrl) {
@@ -271,109 +316,14 @@ export default function PlayerScreen() {
   }, [baseSeries, currentEpisode, setMeta]);
 
   useEffect(() => {
-    player.setPlaybackRate(selectedSpeed, "medium");
-  }, [player, selectedSpeed]);
+    ensureTrackPlayerSetup()
+      .then(() => TrackPlayer.setRate(selectedSpeed))
+      .catch((error) => console.error("[track-player] setRate failed:", error));
+  }, [selectedSpeed]);
 
   useEffect(() => {
     setSpeedInputValue(selectedSpeed.toFixed(1));
   }, [selectedSpeed]);
-
-  // Seek to resume position once audio duration is known
-  useEffect(() => {
-    if (!resumeTime || hasResumedRef.current || status.duration <= 0) return;
-    if (!currentEpisode?.id || currentEpisode.id !== resumeEpisodeId) return;
-    hasResumedRef.current = true;
-    player.seekTo(resumeTime);
-    player.play();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentEpisode?.id, resumeEpisodeId, resumeTime, status.duration > 0]);
-
-  // Auto-save progress every 5 seconds while playing
-  const saveTickRef = useRef(-1);
-  const playbackTick = Math.floor(status.currentTime / 5);
-  useEffect(() => {
-    if (!baseSeries || !currentEpisode || !status.playing) return;
-    if (playbackTick === saveTickRef.current) return;
-    saveTickRef.current = playbackTick;
-    if (status.currentTime < 10) return;
-    saveProgress(baseSeries.id, {
-      episodeId: currentEpisode.id,
-      episodeTitle: currentEpisode.title,
-      currentTime: status.currentTime,
-      savedAt: Date.now(),
-    }, {
-      seriesTitle: baseSeries.title,
-    });
-  }, [baseSeries, currentEpisode, playbackTick, status.currentTime, status.playing]);
-
-  // Single source of truth for "advance to next episode" — called from both the
-  // didJustFinish rising-edge effect and the watchdog. Kept in a ref so the
-  // watchdog interval always sees the latest closure without re-creating the interval.
-  const advanceToNextRef = useRef<() => void>(() => {});
-  advanceToNextRef.current = () => {
-    if (!currentEpisode || !baseSeries) return;
-
-    if (sleepTimerKey === "episode") {
-      clearSleepTimer();
-      player.pause();
-      clearProgress(baseSeries.id);
-      return;
-    }
-
-    const currentIndex = orderedEpisodes.findIndex((ep) => ep.id === currentEpisode.id);
-    const nextEpisode = currentIndex >= 0 ? orderedEpisodes[currentIndex + 1] : null;
-
-    void recordEpisodeFinished();
-
-    if (nextEpisode) {
-      saveTickRef.current = -1;
-      hasResumedRef.current = true;
-      setIsEpisodeSwitching(true);
-      setCurrentEpisodeId(nextEpisode.id);
-    } else {
-      clearProgress(baseSeries.id);
-      setShowEndCard(true);
-    }
-  };
-
-  const prevDidJustFinishRef = useRef(false);
-  useEffect(() => {
-    const risingEdge = status.didJustFinish && !prevDidJustFinishRef.current;
-    prevDidJustFinishRef.current = status.didJustFinish;
-    if (risingEdge) advanceToNextRef.current();
-  }, [status.didJustFinish]);
-
-  // Watchdog: didJustFinish doesn't always fire reliably — iOS background JS throttling
-  // or a network blip near the end of a chapter can leave the player silent without the
-  // event firing. Every second, check if currentTime has stalled within the last 2s of
-  // the track; if it stays stuck >2.5s, force the advance ourselves.
-  const watchdogStatusRef = useRef(status);
-  watchdogStatusRef.current = status;
-  useEffect(() => {
-    if (!currentEpisode?.id) return;
-    let lastTime = -1;
-    let stuckSince = 0;
-    const interval = setInterval(() => {
-      const s = watchdogStatusRef.current;
-      if (!s || !s.duration || s.duration < 5) return;
-      const remaining = s.duration - s.currentTime;
-      const nearEnd = remaining < 2;
-      if (nearEnd && s.currentTime > 0 && s.currentTime === lastTime) {
-        if (stuckSince === 0) {
-          stuckSince = Date.now();
-        } else if (Date.now() - stuckSince > 2500) {
-          console.warn("[player] watchdog: stalled near end without didJustFinish, forcing advance");
-          stuckSince = 0;
-          lastTime = -1;
-          advanceToNextRef.current();
-        }
-      } else {
-        lastTime = s.currentTime;
-        stuckSince = 0;
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [currentEpisode?.id]);
 
   const episodeIndex = orderedEpisodes.findIndex((episode) => episode.id === currentEpisode?.id);
 
@@ -396,6 +346,180 @@ export default function PlayerScreen() {
       });
   }, [episodeIndex, orderedEpisodes, episodeAssets]);
 
+  const playableEpisodes = useMemo(
+    () => orderedEpisodes.filter((episode) => Boolean(getEpisodeSource(episode))),
+    [getEpisodeSource, orderedEpisodes],
+  );
+
+  const buildTrackForEpisode = useCallback(async (episode: Episode): Promise<QueueTrack | null> => {
+    if (!baseSeries) return null;
+    const remoteUrl = getEpisodeSource(episode);
+    if (!remoteUrl) return null;
+    const localUri = await getOfflineUri(episode.id);
+
+    return {
+      id: episode.id,
+      url: localUri ?? remoteUrl,
+      title: episode.title,
+      artist: baseSeries.title,
+      artwork: baseSeries.coverImageUrl ?? undefined,
+      seriesId: baseSeries.id,
+      seriesTitle: baseSeries.title,
+    };
+  }, [baseSeries, getEpisodeSource]);
+
+  useEffect(() => {
+    if (!baseSeries || !currentEpisodeId) return;
+    if (!playableEpisodes.some((episode) => episode.id === currentEpisodeId)) return;
+
+    const series = baseSeries;
+    const requestedEpisodeId = currentEpisodeId;
+    let cancelled = false;
+    const requestId = ++queueSyncRequestRef.current;
+
+    async function syncQueue() {
+      try {
+        setIsEpisodeSwitching(true);
+        setShowEndCard(false);
+        await ensureTrackPlayerSetup();
+
+        const tracks = (await Promise.all(playableEpisodes.map(buildTrackForEpisode)))
+          .filter((track): track is QueueTrack => Boolean(track));
+
+        if (cancelled || requestId !== queueSyncRequestRef.current || tracks.length === 0) return;
+
+        const trackIds = tracks.map((track) => track.id);
+        const existingQueue = (await TrackPlayer.getQueue()) as ExistingQueueTrack[];
+        const existingTrack = (await TrackPlayer.getActiveTrack()) as ExistingQueueTrack | undefined;
+        const existingTrackIds = existingQueue.map((track) => track.id);
+        const existingSeriesId = existingQueue.find((track) => track.seriesId)?.seriesId ?? null;
+
+        if (!queueSeriesIdRef.current && existingSeriesId) {
+          queueSeriesIdRef.current = existingSeriesId;
+        }
+        if (queuedEpisodeIdsRef.current.length === 0 && existingTrackIds.length > 0) {
+          queuedEpisodeIdsRef.current = existingTrackIds;
+        }
+        if (!activeTrackIdRef.current && existingTrack?.id) {
+          activeTrackIdRef.current = existingTrack.id;
+        }
+
+        const sameSeriesQueue = existingSeriesId === series.id;
+        const existingQueueHasCurrent = existingTrackIds.includes(requestedEpisodeId);
+        const existingQueueIsPrefix =
+          sameSeriesQueue &&
+          existingTrackIds.length > 0 &&
+          existingTrackIds.every((id, index) => trackIds[index] === id);
+        const canAppendMissingTracks = existingQueueIsPrefix && trackIds.length > existingTrackIds.length;
+        const shouldReuseExistingQueue =
+          sameSeriesQueue &&
+          existingQueueHasCurrent &&
+          (existingTrackIds.length >= trackIds.length || existingQueueIsPrefix);
+        const queueNeedsReset = !shouldReuseExistingQueue;
+
+        if (queueNeedsReset) {
+          isQueueResettingRef.current = true;
+          await TrackPlayer.reset();
+          await TrackPlayer.setQueue(tracks);
+          queueSeriesIdRef.current = series.id;
+          queuedEpisodeIdsRef.current = trackIds;
+          activeTrackIdRef.current = null;
+          isQueueResettingRef.current = false;
+        } else if (canAppendMissingTracks) {
+          await TrackPlayer.add(tracks.slice(existingTrackIds.length));
+          queueSeriesIdRef.current = series.id;
+          queuedEpisodeIdsRef.current = trackIds;
+        }
+
+        const targetIndex = trackIds.indexOf(requestedEpisodeId);
+        if (targetIndex < 0) return;
+
+        const activeTrackId = activeTrackIdRef.current ?? existingTrack?.id ?? null;
+        const shouldResumeCurrent =
+          Boolean(resumeTime) &&
+          !hasResumedRef.current &&
+          requestedEpisodeId === resumeEpisodeId;
+
+        if (queueNeedsReset || activeTrackId !== requestedEpisodeId) {
+          await TrackPlayer.skip(targetIndex, shouldResumeCurrent ? resumeTime ?? 0 : 0);
+          if (shouldResumeCurrent) {
+            hasResumedRef.current = true;
+          }
+          await TrackPlayer.play();
+          activeTrackIdRef.current = requestedEpisodeId;
+        } else if (shouldResumeCurrent) {
+          await TrackPlayer.seekTo(resumeTime ?? 0);
+          hasResumedRef.current = true;
+          await TrackPlayer.play();
+        }
+
+        if (!cancelled) {
+          setEpisodeAssetError(null);
+          setIsEpisodeSwitching(false);
+        }
+      } catch (error) {
+        isQueueResettingRef.current = false;
+        if (cancelled) return;
+        console.error("[track-player] queue sync failed:", error);
+        setEpisodeAssetError(error instanceof Error ? error.message : "Không thể chuẩn bị hàng đợi audio.");
+        setIsEpisodeSwitching(false);
+      }
+    }
+
+    void syncQueue();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    baseSeries,
+    buildTrackForEpisode,
+    currentEpisodeId,
+    playableEpisodes,
+    resumeEpisodeId,
+    resumeTime,
+  ]);
+
+  useEffect(() => {
+    const activeTrackSub = TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async ({ track, lastTrack }) => {
+      activeTrackIdRef.current = track?.id ?? null;
+      if (track?.id) {
+        setCurrentEpisodeId(track.id);
+        setIsEpisodeSwitching(false);
+      }
+
+      if (sleepTimerKeyRef.current === "episode" && lastTrack && track) {
+        clearSleepTimer();
+        await TrackPlayer.pause();
+        await TrackPlayer.seekTo(0);
+      }
+    });
+
+    const queueEndedSub = TrackPlayer.addEventListener(Event.PlaybackQueueEnded, () => {
+      if (isQueueResettingRef.current) return;
+      if (baseSeries) {
+        void clearProgress(baseSeries.id);
+      }
+      if (sleepTimerKeyRef.current === "episode") {
+        clearSleepTimer();
+      }
+      setShowEndCard(true);
+      setIsEpisodeSwitching(false);
+    });
+
+    const errorSub = TrackPlayer.addEventListener(Event.PlaybackError, (event) => {
+      console.error("[track-player] playback error:", event);
+      setEpisodeAssetError(event.message || "Không phát được audio.");
+      setIsEpisodeSwitching(false);
+    });
+
+    return () => {
+      activeTrackSub.remove();
+      queueEndedSub.remove();
+      errorSub.remove();
+    };
+  }, [baseSeries, clearSleepTimer]);
+
   const progress = status.duration > 0 ? status.currentTime / status.duration : 0;
   const sleepTimerLabel = useMemo(() => {
     const activeOption = SLEEP_TIMER_OPTIONS.find((option) => option.key === sleepTimerKey);
@@ -410,12 +534,6 @@ export default function PlayerScreen() {
     const remainingMinutes = Math.max(1, Math.ceil((sleepTimerEndsAt - Date.now()) / 60_000));
     return `${remainingMinutes}p`;
   }, [sleepTimerEndsAt, sleepTimerKey]);
-
-  // Sync remote command callbacks each render so they always have the latest episode state
-  remoteNextRef.current = episodeIndex >= 0 && episodeIndex < orderedEpisodes.length - 1
-    ? () => changeEpisode(1) : null;
-  remotePrevRef.current = episodeIndex > 0
-    ? () => changeEpisode(-1) : null;
 
   const trackWidthRef = useRef(0);
   const statusRef = useRef(status);
@@ -536,8 +654,7 @@ export default function PlayerScreen() {
       baseSeries?.title ?? "",
       setDownloadProgress,
       baseSeries?.id,
-    ).then((localUri) => {
-      setLocalAudioUri(localUri);
+    ).then(() => {
       setDownloadState("downloaded");
     }).catch((err) => {
       console.error("[download] failed:", err);
@@ -548,7 +665,6 @@ export default function PlayerScreen() {
   const handleDeleteDownload = async () => {
     if (!currentEpisodeId) return;
     await deleteOfflineEpisode(currentEpisodeId);
-    setLocalAudioUri(null);
     setDownloadState("idle");
     setShowDeleteConfirm(false);
   };
@@ -557,9 +673,9 @@ export default function PlayerScreen() {
     if (!baseSeries || episodeIndex < 0) return;
     const nextEpisode = orderedEpisodes[episodeIndex + direction];
     if (!nextEpisode) return;
-    saveTickRef.current = -1;
     hasResumedRef.current = true;
     setIsEpisodeSwitching(true);
+    setShowEndCard(false);
     transcriptSheetRef.current?.dismiss();
     setCurrentEpisodeId(nextEpisode.id);
   };
@@ -915,9 +1031,9 @@ export default function PlayerScreen() {
                 style={[styles.sheetRow, isCurrent && styles.sheetRowActive]}
                 onPress={() => {
                   episodeSheetRef.current?.dismiss();
-                  saveTickRef.current = -1;
                   hasResumedRef.current = true;
                   setIsEpisodeSwitching(true);
+                  setShowEndCard(false);
                   setCurrentEpisodeId(ep.id);
                 }}
               >
