@@ -48,7 +48,7 @@
     },
     "ios": {
       "bundleIdentifier": "com.supperking03.audio-story",
-      "buildNumber": "13",
+      "buildNumber": "14",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
