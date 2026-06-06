@@ -126,6 +126,11 @@ export default function PlayerScreen() {
   const isQueueResettingRef = useRef(false);
   const sleepTimerKeyRef = useRef<SleepTimerOptionKey>("off");
   const queueSyncRequestRef = useRef(0);
+  // True while syncQueue is reshaping/skipping the queue. The active-track-changed
+  // listener ignores events during this window — otherwise the transient track that
+  // TrackPlayer reports while setQueue/skip run (often index 0) would hijack
+  // currentEpisodeId and ping-pong with the intended target (infinite update loop).
+  const isSyncingRef = useRef(false);
 
   const clearSleepTimer = () => {
     if (sleepTimerTimeoutRef.current) {
@@ -379,6 +384,7 @@ export default function PlayerScreen() {
 
     async function syncQueue() {
       try {
+        isSyncingRef.current = true;
         setIsEpisodeSwitching(true);
         setShowEndCard(false);
         await ensureTrackPlayerSetup();
@@ -463,6 +469,10 @@ export default function PlayerScreen() {
         console.error("[track-player] queue sync failed:", error);
         setEpisodeAssetError(error instanceof Error ? error.message : "Không thể chuẩn bị hàng đợi audio.");
         setIsEpisodeSwitching(false);
+      } finally {
+        // Only the latest sync clears the flag, so a superseded run doesn't unlock
+        // it while a newer sync is still in progress.
+        if (requestId === queueSyncRequestRef.current) isSyncingRef.current = false;
       }
     }
 
@@ -482,6 +492,9 @@ export default function PlayerScreen() {
 
   useEffect(() => {
     const activeTrackSub = TrackPlayer.addEventListener(Event.PlaybackActiveTrackChanged, async ({ track, lastTrack }) => {
+      // Ignore the transient track changes TrackPlayer emits while we're rebuilding
+      // / skipping the queue — only react to genuine (native auto-advance) changes.
+      if (isSyncingRef.current) return;
       activeTrackIdRef.current = track?.id ?? null;
       if (track?.id) {
         setCurrentEpisodeId(track.id);
