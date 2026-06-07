@@ -81,7 +81,7 @@ export function RequestStoryCard({
     setIsSavingNotif(false);
     setAlreadySubscribed(wants);
     setShowModal(false);
-    setStatus("sent");
+    setStatus("Đã nhận yêu cầu của bạn.");
   };
 
   if (autoSubmit) {

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { createContext, useContext, useRef, useState, type ReactNode } from "react";
 
 export type PlayerMeta = {
   episodeId: string;
@@ -11,18 +11,24 @@ export type PlayerMeta = {
 
 type PlayerContextValue = {
   meta: PlayerMeta;
-  setMeta: Dispatch<SetStateAction<PlayerMeta>>;
+  setMeta: (meta: PlayerMeta) => void;
+  remoteNextRef: React.MutableRefObject<(() => void) | null>;
+  remotePrevRef: React.MutableRefObject<(() => void) | null>;
 };
 
 const PlayerContext = createContext<PlayerContextValue>({
   meta: null,
   setMeta: () => {},
+  remoteNextRef: { current: null },
+  remotePrevRef: { current: null },
 });
 
 export function PlayerMetaProvider({ children }: { children: ReactNode }) {
   const [meta, setMeta] = useState<PlayerMeta>(null);
+  const remoteNextRef = useRef<(() => void) | null>(null);
+  const remotePrevRef = useRef<(() => void) | null>(null);
   return (
-    <PlayerContext.Provider value={{ meta, setMeta }}>
+    <PlayerContext.Provider value={{ meta, setMeta, remoteNextRef, remotePrevRef }}>
       {children}
     </PlayerContext.Provider>
   );

@@ -28,9 +28,14 @@
     "experiments": {
       "typedRoutes": true
     },
-    "newArchEnabled": true,
     "plugins": [
       "expo-router",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": true
+        }
+      ],
       [
         "expo-notifications",
         {
